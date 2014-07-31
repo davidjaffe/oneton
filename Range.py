@@ -10,8 +10,8 @@ import os
 class Range():
     def __init__(self):
         # where is the range, dE/dx data?
-        self.ESTARdir = '/Users/djaffe/work/paw/ESTAR/'
-        self.PSTARdir = '/Users/djaffe/work/paw/PSTAR/'
+        self.ESTARdir = 'ESTAR/'
+        self.PSTARdir = 'PSTAR/'
         self.dirs = {self.ESTARdir: ['electron', 'positron', 'e-', 'e+'],\
                      self.PSTARdir: ['proton', 'antiproton', 'p', 'pbar'] }
         # what is the meaning of each column in the data files

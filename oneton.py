@@ -368,12 +368,12 @@ class oneton():
             if x-self.PMTradius>0:
                 xyzPMT.append( [x, 0., ztop, self.PMTradius, False] )
                 xyzPMT.append( [-x, 0., ztop, self.PMTradius, False] )
-        print '{0:4} {1:7} {2:7} {3:7} '.format('PMT#','x','y','z')
+        print '{0:4} {1:8} {2:8} {3:8} '.format('PMT#','x','y','z')
         for i,pmt in enumerate(xyzPMT):
             position = 'Vert'
             if pmt[4]: position = 'Side'
-            position = 'Side'
-            print '{0:4} {1:7.3f} {2:7.3f} {3:7.3f} {4}'.format(i,pmt[0],pmt[1],pmt[2],position)
+            #position = 'Side'
+            print '{0:4} {1:>8.3f} {2:>8.3f} {3:>8.3f} {4}'.format(i,pmt[0],pmt[1],pmt[2],position)
         return xyzPMT
     def hitPMT(self,photonT,xyzPMT):
         '''
@@ -447,10 +447,12 @@ class oneton():
                 particle = 'e-'
                 material = 'water'
                 KE = 2.28
-                particle = 'proton'
-                KE = 475. # 2000.
+                #particle = 'proton'
+                #KE = 475. # 2000.
                 tStart = [0., 0., -1250+12.]
                 tDir = [.0, 0.0, -1.]
+                tStart = [0., 0., -12.]
+                tDir = [0., 0., 1.]
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')

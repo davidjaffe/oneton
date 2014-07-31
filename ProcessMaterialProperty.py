@@ -10,10 +10,10 @@ import sys
 import random
 
 class ProcessMaterialProperty():
-    defaultDir = '/Users/djaffe/Documents/Reactor/work/trunk/NuWa-trunk/dybgaudi/Detector/XmlDetDesc/DDDB/materials/'
-    otherDir   = '/Users/djaffe/PythonScripts/'
+    defaultDir = 'DYBmaterials/' # '/Users/djaffe/Documents/Reactor/work/trunk/NuWa-trunk/dybgaudi/Detector/XmlDetDesc/DDDB/materials/'
+    otherDir   = './' # /Users/djaffe/PythonScripts/'
     def __init__(self,dbg=0):
-        self.debug = dbg
+        self.debug =  dbg
         self.Property = {}    # map of maps
         self.sortedPropertyKeys = {}
 
