@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE materials SYSTEM "../DTD/materials.dtd">
+<materials>
+
+
+  <!-- HDPE -->
+  <material name="Tyvek" density="0.94*g/cm3" state="solid">
+    <!-- Numbers taken from dywDetectorConstructor -->
+    <component name="Carbon"		natoms="2"/>
+    <component name="Hydrogen"	natoms="4"/>
+  </material>
+
+</materials>

@@ -1,0 +1,221 @@
+
+<!-- Gadolinium, taken from G4Dyb. -->
+<isotope name="Gd_152" A="152.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_154" A="154.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_155" A="155.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_156" A="156.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_157" A="157.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_158" A="158.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<isotope name="Gd_160" A="160.0*g/mole" Z="64" density="7.9*g/cm3"/>
+<!-- G4dyb uses ubundance, we need fraction mass = ubundance*mass/avgmass -->
+<element name="Gadolinium" symbol="Gd" density="7.9*g/cm3">
+  <isotoperef href="#Gd_152" fractionmass="0.002*152/157.318"/>
+  <isotoperef href="#Gd_154" fractionmass="0.022*154/157.318"/>
+  <isotoperef href="#Gd_155" fractionmass="0.149*155/157.318"/>
+  <isotoperef href="#Gd_156" fractionmass="0.206*156/157.318"/>
+  <isotoperef href="#Gd_157" fractionmass="0.157*157/157.318"/>
+  <isotoperef href="#Gd_158" fractionmass="0.247*158/157.318"/>
+  <isotoperef href="#Gd_160" fractionmass="0.217*160/157.318"/>
+</element>  
+
+
+<material name="Rock" density="2.7*g/cm3" state="solid">
+  <!-- Numbers taken from dywDetectorConstructor -->
+  <component name="Oxygen"		fractionmass="0.4850"/>
+  <component name="Silicon"		fractionmass="0.3430"/>
+  <component name="Aluminium"	fractionmass="0.0800"/> <!-- Brit spelling -->
+  <component name="Iron"		fractionmass="0.02"/>
+  <component name="Magnesium"	fractionmass="0.001"/>
+  <component name="Calcium"		fractionmass="0.002"/>
+  <component name="Sodium"		fractionmass="0.0240"/>
+  <component name="Potassium"	fractionmass="0.0450"/>
+</material>
+
+<material name="RadRock" density="2.7*g/cm3" state="solid">
+  <!-- Numbers taken from dywDetectorConstructor -->
+  <component name="Oxygen"		fractionmass="0.4850"/>
+  <component name="Silicon"		fractionmass="0.3430"/>
+  <component name="Aluminium"	fractionmass="0.0800"/> <!-- Brit spelling -->
+  <component name="Iron"		fractionmass="0.02"/>
+  <component name="Magnesium"	fractionmass="0.001"/>
+  <component name="Calcium"		fractionmass="0.002"/>
+  <component name="Sodium"		fractionmass="0.0240"/>
+  <component name="Potassium"	fractionmass="0.0450"/>
+</material>
+
+
+<!-- HDPE -->
+<material name="Tyvek" density="0.94*g/cm3" state="solid">
+  <!-- Numbers taken from dywDetectorConstructor -->
+  <component name="Carbon"		natoms="2"/>
+  <component name="Hydrogen"	natoms="4"/>
+  <tabprops	address="/dd/Materials/TyvekProperties/TyvekAbsorptionLength"/>
+</material>
+
+<!-- Borated Poly -->
+<material name="BPE" density="0.93*g/cm3" state="solid">
+  <!-- Numbers taken from dywDetectorConstructor -->
+  <component name="Hydrogen"		fractionmass="0.116"/>
+  <component name="Boron"		fractionmass="0.612"/>
+  <component name="Carbon"		fractionmass="0.05"/> 
+  <component name="Oxygen"		fractionmass="0.222"/>
+</material>
+
+<!-- Polypropylene for the pool cover, the density from Vyrodov Vladimir-->
+<material name="PPE" density="0.920*g/cm3" state="solid">
+  <!-- Numbers taken from dywDetectorConstructor -->
+  <component	name="Carbon"	fractionmass="12.0107/(12.0107+3.*1.00794)"/>
+  <component	name="Hydrogen"	fractionmass="3.*1.00794/(12.0107+3.*1.00794)"/>  <tabprops	address="/dd/Materials/PPEProperties/PPEAbsorptionLength"/>
+</material>
+
+
+<!-- Special Pyrex-specifc materials as the density from G4dyb differs from Standard.xml -->
+<material	name="PyrexSiO2"	density="2.23*g/cm3">
+  <component	name="Silicon"	natoms="1"/>
+  <component	name="Oxygen"	natoms="2"/>
+</material>
+<material	name="PyrexNa2O"	density="2.23*g/cm3">
+  <component	name="Sodium"	natoms="2"/>
+  <component	name="Oxygen"	natoms="1"/>      
+</material>
+<material	name="PyrexB2O2"	density="2.23*g/cm3">
+  <component	name="Boron"	natoms="2"/>
+  <component	name="Oxygen"	natoms="2"/>
+</material>
+
+<material	name="Pyrex"	density="2.23*g/cm3" state="solid">
+  <component	name="PyrexSiO2"	fractionmass="0.80"/>
+  <component	name="PyrexB2O2"	fractionmass="0.13"/>
+  <component	name="PyrexNa2O"	fractionmass="0.07"/>
+  <tabprops	address="/dd/Materials/PyrexProperties/PyrexAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/PyrexProperties/PyrexRefractionIndex"/>
+</material>
+
+
+<!-- Fixme: taken from LHCb def for their HPD photocathode -->
+<material	name="Bialkali"	density="0.100*g/cm3">
+  <component	name="Sodium"		fractionmass="0.3750" />
+  <component	name="Potassium"	fractionmass="0.1875" />
+  <component	name="Cesium"		fractionmass="0.1875" />
+  <component	name="Antimony"		fractionmass="0.2500" />
+
+  <!-- Make PC look like glass for optical photons -->
+  <tabprops	address="/dd/Materials/PyrexProperties/PyrexAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/PyrexProperties/PyrexRefractionIndex"/>
+
+  <tabprops	address="/dd/Materials/BialkaliProperties/PhotoCathodeQE"/>
+  <!-- 
+  <tabprops	address="/dd/Materials/BialkaliProperties/BialikaliAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/BialkaliProperties/BialkaliRefractionIndex"/>
+  -->
+</material>
+
+<!-- Stainless Steel -->
+
+<material	name="StainlessSteel"	density="8.1*g/cm3">
+  <component	name="Iron"		fractionmass="0.70845" />
+  <component	name="Carbon"		fractionmass="0.0008" />
+  <component	name="Manganese"	fractionmass="0.02" />
+  <component	name="Phosphor"		fractionmass="0.00045" />
+  <component	name="Sulfur"		fractionmass="0.00030" />
+  <component	name="Silicon"		fractionmass="0.01" />
+  <component	name="Chromium"		fractionmass="0.18" />
+  <component	name="Nickel"		fractionmass="0.08" />
+  <tabprops	address="/dd/Materials/SteelProperties/SteelAbsorptionLength"/>
+  <!-- fixme: need optical properties (reflectivity) -->
+</material>
+
+<material	name="UnstStainlessSteel"	density="8.1*g/cm3">
+  <component	name="Iron"		fractionmass="0.70845" />
+  <component	name="Carbon"		fractionmass="0.0008" />
+  <component	name="Manganese"	fractionmass="0.02" />
+  <component	name="Phosphor"		fractionmass="0.00045" />
+  <component	name="Sulfur"		fractionmass="0.00030" />
+  <component	name="Silicon"		fractionmass="0.01" />
+  <component	name="Chromium"		fractionmass="0.18" />
+  <component	name="Nickel"		fractionmass="0.08" />
+  <tabprops	address="/dd/Materials/SteelProperties/SteelAbsorptionLength"/>
+  <!-- fixme: need optical properties (reflectivity) -->
+</material>
+
+<material	name="ADTableStainlessSteel"	density="8.1*g/cm3">
+  <component	name="Iron"		fractionmass="0.70845" />
+  <component	name="Carbon"		fractionmass="0.0008" />
+  <component	name="Manganese"	fractionmass="0.02" />
+  <component	name="Phosphor"		fractionmass="0.00045" />
+  <component	name="Sulfur"		fractionmass="0.00030" />
+  <component	name="Silicon"		fractionmass="0.01" />
+  <component	name="Chromium"		fractionmass="0.18" />
+  <component	name="Nickel"		fractionmass="0.08" />
+  <tabprops	address="/dd/Materials/SteelProperties/SteelAbsorptionLength"/>
+  <!-- fixme: need optical properties (reflectivity) -->
+</material>
+
+
+
+<!-- Acrylic for AV (CH2=C(CH3)CO2CH3) -->
+<material	name="Acrylic"	density="1.18*g/cm3">
+  <component	name="Carbon"	fractionmass="0.59984"/>
+  <component	name="Hydrogen"	fractionmass="0.08055"/>
+  <component	name="Oxygen"	fractionmass="0.31961"/>
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicRefractionIndex"/>
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicRAYLEIGH"/>
+</material>
+
+<!-- Teflon -->
+<material	name="Teflon"	density="2.2*g/cm3">
+  <component	name="Carbon"	fractionmass="0.759814"/>
+  <component	name="Fluorine"	fractionmass="0.240186"/>
+  <!-- Real measurements needed? -->
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicRefractionIndex"/>
+  <tabprops	address="/dd/Materials/AcrylicProperties/AcrylicRAYLEIGH"/>
+</material>
+
+<!-- Atomic mass of natural elements -->
+<!-- Can't use parameters in materials... 
+<parameter name="mCarbon" value="12.0107"/>
+<parameter name="mHydrogen" value="1.00794"/>
+<parameter name="mFluorine" value="18.9984032"/>
+ -->
+<!-- ESR -->
+<material	name="ESR"	density="1.*g/cm3">
+  <component	name="Carbon"	fractionmass="12.0107/(12.0107+2.*1.00794)"/>
+  <component	name="Hydrogen"	fractionmass="2.*1.00794/(12.0107+2.*1.00794)"/>
+  <!-- Optical properties not finished yet -->
+  <tabprops	address="/dd/Materials/ESRProperties/ESRAbsorptionLength"/>
+</material>
+
+<!-- PVC -->
+<material name="PVC" density="1.39*g/cm3">
+  <component name="Carbon" natoms="2"/>
+  <component name="Hydrogen" natoms="3"/>
+  <component name="Chlorine" natoms="1"/>
+</material>
+
+<!-- Nylon for LED diffuser balls -->
+<material name="Nylon" density="1.15*g/cm3" state="solid">
+  <!-- Nylon 6,6 is assumed and numbers are taken from Wikipedia -->
+  <component	name="Carbon"	fractionmass="0.636848"/>
+  <component	name="Hydrogen"	fractionmass="0.097981"/>
+  <component	name="Oxygen"	fractionmass="0.141390"/>
+  <component	name="Nitrogen"	fractionmass="0.123780"/>
+</material>
+
+<!-- Solid Scintillator -->
+<!-- Approximate using liq. Scintillator properties, change density-->
+<material	name="SolidScintillator"	density="1.000*g/cm3">
+  <component	name="Carbon"	fractionmass="0.8544"/>
+  <component	name="Hydrogen"	fractionmass="0.1289"/>
+  <component	name="Oxygen"	fractionmass="0.0164"/>
+  <component	name="Nitrogen"	fractionmass="0.0003"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSAbsorptionLength"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSRefractionIndex"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSRAYLEIGH"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSFast"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSReemission"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSScintillationYield"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSResolutionScale"/>
+  <tabprops	address="/dd/Materials/LSProperties/LSFastTimeConstant"/>
+</material>

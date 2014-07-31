@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DDDB SYSTEM "../DTD/geometry.dtd">
+
+<!-- Don't forget to list what materials to use in the <material> section -->
+
+<DDDB>
+
+
+  <!-- 
+
+       Note: these are bogus for now
+
+    -->
+
+  <catalog name="TyvekProperties">
+
+    <tabproperty name="TyvekAbsorptionLength"
+		 type="ABSLENGTH"
+		 xunit="eV"
+		 yunit="mm"
+		 xaxis="PhotonEnergy"
+		 yaxis="AbsorptionLength">
+      1.55 10e3
+      6.20 10e3
+    </tabproperty> 
+    
+  </catalog>
+</DDDB>

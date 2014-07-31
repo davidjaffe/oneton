@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DDDB SYSTEM "../DTD/geometry.dtd">
+
+<!-- Don't forget to list what materials to use in the <material> section -->
+
+<DDDB>
+
+
+  <catalog name="PyrexProperties">
+
+
+
+    <!-- From G4dyb -->
+    <tabproperty name="PyrexAbsorptionLength"
+		 type="ABSLENGTH"
+		 xunit="eV"
+		 yunit="mm"
+		 xaxis="PhotonEnergy"
+		 yaxis="AbsorptionLength">
+	1.55	0.1e-3
+	1.61	0.5e3
+	2.07	1.0e3
+	2.48	2.0e3
+	3.56	1.0e3 
+	4.13    1.0e3
+	6.20    1.0e3
+	10.33    1.0e3
+	15.5    1.0e3
+<!--	4.13	0.1e-3 
+	6.20	0.1e-3 --> 
+    </tabproperty>
+
+    <!-- From G4dyb -->
+    <tabproperty name="PyrexRefractionIndex"
+		 type="RINDEX"
+		 xunit="eV"
+		 xaxis="PhotonEnergy"
+		 yaxis="RefractionIndex">
+	1.55	1.458 
+	2.07	1.458 
+	4.13	1.458 
+	6.20	1.458
+	10.33	1.458
+	15.5	1.458
+    </tabproperty>
+  </catalog>
+</DDDB>

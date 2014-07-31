@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE materials SYSTEM "../DTD/materials.dtd"[
+<!ENTITY StandardMaterials SYSTEM "Standard.xml">
+<!ENTITY ExtraMaterials SYSTEM "ExtraMaterials.xml">
+<!ENTITY AdLiquids SYSTEM "AdLiquids.xml">
+]>
+<materials>
+  <catalog name="Materials">
+
+    &StandardMaterials;
+    &ExtraMaterials;
+    &AdLiquids;
+
+    <catalogref href="water.xml#WaterProperties"/>
+    <catalogref href="air.xml#AirProperties"/>
+    <catalogref href="vacuum.xml#VacuumProperties"/>
+    <catalogref href="tyvek.xml#TyvekProperties"/>
+    <catalogref href="pyrex.xml#PyrexProperties"/>
+    <catalogref href="oil.xml#OilProperties"/>
+    <catalogref href="acrylic.xml#AcrylicProperties"/>
+    <catalogref href="ESR.xml#ESRProperties"/>
+    <catalogref href="scintillator.xml#LSProperties"/>
+    <catalogref href="gadolinium.xml#GdLSProperties"/>
+    <catalogref href="bialkali.xml#BialkaliProperties"/>
+    <catalogref href="steel.xml#SteelProperties"/>
+    <catalogref href="pol.xml#PPEProperties"/>
+  </catalog>
+
+</materials>

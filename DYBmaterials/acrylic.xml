@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DDDB SYSTEM "../DTD/geometry.dtd">
+
+<DDDB>
+
+
+  <catalog name="AcrylicProperties">
+
+    <!-- This is taken from G4dyb's MaterialProperties.xml and massaged to fit -->
+    <tabproperty name="AcrylicAbsorptionLength"
+		 type="ABSLENGTH"
+		 xunit="eV"
+		 yunit="mm"
+		 xaxis="PhotonEnergy"
+		 yaxis="AbsorptionLength">
+	                1.55	               8.0e3
+	                1.61	               8.0e3
+	                2.07	               8.0e3
+	                2.48	               8.0e3
+	                3.76	               8.0e3
+	                4.13	               8.0e3
+	                6.20	              8.0e-3
+	                10.33	              8.0e-3
+	                15.5	              8.0e-3
+    </tabproperty> <!-- abs length -->
+
+    <tabproperty name="AcrylicRAYLEIGH"
+                 type="RAYLEIGH"
+                 xunit="eV"
+                 yunit="m"
+                 xaxis="PhotonEnergy"
+                 yaxis="ScatteringLength">
+                 1.55                500.0
+                 1.7714              300.0
+                 2.102               170.0
+                 2.255               100.0
+                 2.531               62.0
+                 2.884               42.0
+                 3.024               30.0
+                 4.133               7.6
+                 6.20                0.85
+                 10.33                0.85
+                 15.5                0.85
+    </tabproperty>
+
+    <tabproperty name="AcrylicRefractionIndex"
+		 type="RINDEX"
+		 xunit="eV"
+		 yunit=""
+		 xaxis="PhotonEnergy"
+		 yaxis="IndexOfRefraction">
+                    1.55	              1.4878
+	             1.79505	              1.4895
+	             2.10499	              1.4925
+	             2.27077	              1.4946
+	             2.55111	              1.4986
+	             2.84498	              1.5022
+	             3.06361	              1.5065
+	             4.13281	              1.5358
+                 6.20	              1.6279 
+                 6.526	              1.6270 
+                 6.889	              1.5359 
+                 7.294	              1.5635 
+                 7.75	              1.793 
+                 8.267	              1.7199 
+                 8.857	              1.6739 
+                 9.538	              1.5635 
+                 10.33	              1.462
+                 15.5	              1.462
+                 <!--  1.55                  1.4781
+                 1.79505                    1.48
+                 2.10499                  1.4842
+                 2.27077                  1.4861
+                 2.55111                  1.4915
+                 2.84498                  1.4955
+                 3.06361                  1.4988
+                 4.13281                  1.5264
+                 6.20                  1.6185 -->
+    </tabproperty> <!-- index of refraction -->
+  </catalog>
+</DDDB>
+

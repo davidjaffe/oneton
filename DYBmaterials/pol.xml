@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DDDB SYSTEM "../DTD/geometry.dtd">
+
+<DDDB>
+
+
+  <!-- 
+
+       Note: these are bogus for now
+       polypropylene properties unknown, just a copy from steel for now
+
+    -->
+
+
+  <catalog name="PPEProperties">
+
+    <tabproperty name="PPEAbsorptionLength"
+		 type="ABSLENGTH"
+		 xunit="eV"
+		 yunit="mm"
+		 xaxis="PhotonEnergy"
+		 yaxis="AbsorptionLength">
+      1.55 0.001
+      6.20 0.001
+      10.33 0.001
+      15.5 0.001
+    </tabproperty> 
+    
+  </catalog>
+</DDDB>

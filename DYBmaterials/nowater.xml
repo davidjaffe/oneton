@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE DDDB SYSTEM "../DTD/geometry.dtd">
+
+<!-- Don't forget to list what materials to use in the <material> section -->
+
+<DDDB>
+
+
+  <catalog name="WaterProperties">
+
+
+    <!-- This is taken from G4dyb's MaterialProperties.xml and massaged to fit -->
+    <tabproperty name="WaterAbsorptionLength"
+		 type="ABSLENGTH"
+		 xunit="eV"
+		 yunit="cm"
+		 xaxis="PhotonEnergy"
+		 yaxis="AbsorptionLength">
+                 1.5498024 10000.0
+                 6.3257241 10000.0
+    </tabproperty> <!-- absorption length -->
+
+    <tabproperty name="WaterRefractionIndex"
+		 type="RINDEX"
+		 xunit="eV"
+		 yunit=""
+		 xaxis="PhotonEnergy"
+		 yaxis="IndexOfRefraction">
+                 1.55 1.000273
+                 6.20 1.000273
+    </tabproperty> <!-- index of refraction -->
+  </catalog>
+</DDDB>

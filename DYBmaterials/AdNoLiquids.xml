@@ -1,0 +1,33 @@
+
+<!-- Replace liquids with nitrogen gas to simulate dry AD -->
+
+<!-- Mineral Oil -->
+<material	name="MineralOil" 
+            density="1.251*gram/liter" 
+            pressure="1.*atmosphere" 
+            temperature="273.*kelvin">
+  <component fractionmass="1.0" name="Nitrogen"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenAbsorptionLength"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenRefractionIndex"/>
+</material>
+
+<!-- Liquid Scintillator -->
+<material	name="LiquidScintillator" 
+            density="1.251*gram/liter" 
+            pressure="1.*atmosphere" 
+            temperature="273.*kelvin">
+  <component fractionmass="1.0" name="Nitrogen"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenAbsorptionLength"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenRefractionIndex"/>
+</material>
+
+<!-- Gd Doped LS -->
+<material	name="GdDopedLS" 
+            density="1.251*gram/liter" 
+            pressure="1.*atmosphere" 
+            temperature="273.*kelvin">
+  <component fractionmass="1.0" name="Nitrogen"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenAbsorptionLength"/>
+  <tabprops address="/dd/Materials/AirProperties/NitrogenRefractionIndex"/>
+</material>
+
