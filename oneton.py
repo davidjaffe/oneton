@@ -18,7 +18,7 @@ import copy
 class oneton():
     def __init__(self):
 
-        self.debug = 1
+        self.debug = 3
 
         # initialize external classes. Note self.Photons initialized below
         self.traj = trajectory.trajectory()
@@ -140,6 +140,7 @@ class oneton():
                 if goodm: x2,y2 = x2m,y2m
                 if goodp: x2,y2 = x2p,y2p
             vector = [ [x1,y1,z1], [x2,y2,z2] ]
+            if self.debug>2: print 'oneton.makeVector perfectly horizontal trajectory. vector',vector
         else:  # upward or downward going trajectory, extrapolate to plane containing an endplate
             if (z1-zbottom)*unitV[2]<0:
                 z2 = zbottom
@@ -154,8 +155,7 @@ class oneton():
                 print 'oneton.makeVector: initial',vector
             # place end of vector on detector wall or end            
             vector = self.traj.getImpact( vector, self.Detector )
-            if self.debug>2:
-                print 'oneton.makeVector: final',vector
+            if self.debug>2: print 'oneton.makeVector up-/downward trajectory. vector',vector
         return vector
     def makeOpticalPhotonTrack(self, tStart,tDir, D, gDir):
         '''
@@ -180,6 +180,66 @@ class oneton():
         st = math.sqrt(1. - ct*ct)
         U = [math.cos(f)*st,math.sin(f)*st,ct]
         return U
+    def resolveUnitToMatrix(self, tDir):
+        '''
+        resolve the input unit vector into a matrix to be applied to the z-unit vector
+        tDir = M * (0,0,1)
+        return M
+        '''
+        ct = tDir[2]
+        st = math.sqrt(1. - ct*ct)
+        phi = math.atan2(tDir[1],tDir[0])
+        cp = math.cos(phi)
+        sp = math.sin(phi)
+        M = numpy.array([cp*ct,-sp,cp*st,  sp*ct,cp,sp*st, -st,0.,ct]).reshape(3,3)
+        return M
+    def makeRUV(self, tDir, cost, phi):
+        '''
+        return unit vector gDir that is at angle theta (acos(cost)) wrt tDir and rotated
+        about tDir by phi
+        '''
+        # first make gDir at angle theta in xz plane
+        tx,ty,tz = tDir
+        s = tx*math.sqrt(tx*tx + tz*tz - cost*cost)
+        M = self.rotation_matrix(tDir,phi)
+        for sz in [-1.,1.]:
+            gz = (tz*cost + sz*s)/(tx*tx + tz*tz)
+            r = math.sqrt(1.-gz*gz) 
+            for sx in [-1.,1.]:
+                gx = sx*r
+                gDir = [gx, 0., gz]
+                rDir = numpy.dot(M, numpy.array(gDir))
+                xDir = self.ERvector(gDir, tDir, phi)
+                ct1,ct2,ct3 = 0., 0., 0.
+                for i,a in enumerate(zip(gDir,rDir)):
+                    ct1 += a[0]*tDir[i]
+                    ct2 += a[1]*tDir[i]
+                    ct3 += xDir[i]*tDir[i]
+                print 'sz',sz,'sx',sx,'in cost',cost,'ct1',ct1,'ct2',ct2,'ct3',ct3,'\ngDir',gDir,'rDir',rDir,'xDir',xDir
+        return
+    def ERvector(self,x1,AXIS,phi):
+        '''
+        return unit vector x2 = rotation of x1 about AXIS by angle phi
+        using Euler-Rodriques vector formulation
+        '''
+        a = math.cos(phi/2.)
+        axis = numpy.array( AXIS )
+        w = math.sin(phi/2.)*axis/math.sqrt(numpy.dot(axis,axis))
+        wx = numpy.cross(w,x1)
+        x2 = x1 + 2.*a*wx + 2*numpy.cross(w,wx)
+        return x2
+    
+    def rotation_matrix(self,AXIS,theta):
+        axis = numpy.array( AXIS )
+        axis = axis/math.sqrt(numpy.dot(axis,axis))
+        a = math.cos(theta/2)
+        b,c,d = -axis*math.sin(theta/2)
+        
+        M =  numpy.array([[a*a+b*b-c*c-d*d, 2*(b*c-a*d), 2*(b*d+a*c)],
+                          [2*(b*c+a*d), a*a+c*c-b*b-d*d, 2*(c*d-a*b)],
+                          [2*(b*d-a*c), 2*(c*d+a*b), a*a+d*d-b*b-c*c]])
+        return M
+        
     def makeRotatedUnitVector(self, tDir, cost, phi): #, gamma=None):
         '''
         create unit vector by apply a rotation about the z axis by theta
@@ -202,9 +262,10 @@ class oneton():
         a,b,c = w
         gDir = [a,b,c]
         gDir = self.normVector(gDir)
-        if self.debug>2: 
+        if self.debug>2:
+            calcct = gDir[0]*tDir[0]+gDir[1]*tDir[1]+gDir[2]*tDir[2]
             print 'oneton.makeRotatedUnitVector: tDir',tDir,'ct',ct,'phi',phi,'gDir',gDir,\
-                  'v',v,'w',w,'\nT',T
+                  'v',v,'w',w,'calcct',calcct,'\nT',T
         return gDir
     def oneEvent(self, particle, material, KE, tStart, tDir=[0.,0.,-1.], processes=[]):
         '''
@@ -263,9 +324,11 @@ class oneton():
         for i,sample in enumerate(samples):
             KE, pathlength = sample
             for option in processes:
+                if self.debug>1: print 'oneton.oneEvent process',option
                 if option == 'Cerenkov':
                     y,OPElimits,OP,cost = self.cerenkov.getCerenkovYield(KE,pathlength,particle,material,makeOP=True)
                     totalCerYield += y
+                    if self.debug>1: print 'oneton.oneEvent process',option,'yield',y
                     for ct in cost:
                         dist = random.uniform(0.,pathlength) # start OP at random point on this sample of track
                         gDir = self.makeRotatedUnitVector(tDir,ct,random.uniform(0.,self.twopi)) 
@@ -279,10 +342,11 @@ class oneton():
                     if i+1<len(samples): KEs.append( samples[i+1][0] )
                     yScint,OPscint = self.getScintYield(KEs,material,makeOP=True)
                     totalSciYield += yScint
+                    if self.debug>1: print 'oneton.oneEvent process',option,'yield',yScint
                     fake = []
                     for j in range(len(OPscint)):
                         dist = random.uniform(0.,pathlength)
-                        gDir = self.makeRotatedUnitVector(tDir,random.uniform(0.,1),random.uniform(0.,self.twopi))
+                        gDir = self.makeRotatedUnitVector(tDir,random.uniform(-1.,1),random.uniform(0.,self.twopi))
                         vector = self.makeOpticalPhotonTrack(X1,tDir,dist,gDir)
                         PhotonVectors.append( [vector, option, self.options[option] ] )
                         fake.append( -2. )
@@ -452,7 +516,8 @@ class oneton():
                 tStart = [0., 0., -1250+12.]
                 tDir = [.0, 0.0, -1.]
                 tStart = [0., 0., -12.]
-                tDir = [0., 0., 1.]
+                tStart = [self.Detector[0]-10.,0.,self.Detector[2]/2]
+                tDir = [1., 0., 0.]
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')
