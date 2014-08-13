@@ -18,7 +18,7 @@ import copy
 class oneton():
     def __init__(self):
 
-        self.debug = 3
+        self.debug = 0
 
         # initialize external classes. Note self.Photons initialized below
         self.traj = trajectory.trajectory()
@@ -198,25 +198,20 @@ class oneton():
         return unit vector gDir that is at angle theta (acos(cost)) wrt tDir and rotated
         about tDir by phi
         '''
-        # first make gDir at angle theta in xz plane
-        tx,ty,tz = tDir
-        s = tx*math.sqrt(tx*tx + tz*tz - cost*cost)
-        M = self.rotation_matrix(tDir,phi)
-        for sz in [-1.,1.]:
-            gz = (tz*cost + sz*s)/(tx*tx + tz*tz)
-            r = math.sqrt(1.-gz*gz) 
-            for sx in [-1.,1.]:
-                gx = sx*r
-                gDir = [gx, 0., gz]
-                rDir = numpy.dot(M, numpy.array(gDir))
-                xDir = self.ERvector(gDir, tDir, phi)
-                ct1,ct2,ct3 = 0., 0., 0.
-                for i,a in enumerate(zip(gDir,rDir)):
-                    ct1 += a[0]*tDir[i]
-                    ct2 += a[1]*tDir[i]
-                    ct3 += xDir[i]*tDir[i]
-                print 'sz',sz,'sx',sx,'in cost',cost,'ct1',ct1,'ct2',ct2,'ct3',ct3,'\ngDir',gDir,'rDir',rDir,'xDir',xDir
-        return
+        ## define axis of theta rotation as unit vector orthogonal to tDir
+        t = numpy.array(tDir)
+        u = numpy.array([1.,0.,0.])
+        r = numpy.cross(t,u)
+        if sum(r)==0.:
+            u = numpy.array([0.,1.,0.])
+            r = numpy.cross(t,u)
+        ## now do rotation about r
+        v = self.ERvector(t,r,math.acos(cost))
+        ## now do rotation about t of angle phi
+        g = self.ERvector(v,t,phi)
+        # render as list instead of array
+        gDir = [ g[0], g[1], g[2] ]
+        return gDir
     def ERvector(self,x1,AXIS,phi):
         '''
         return unit vector x2 = rotation of x1 about AXIS by angle phi
@@ -331,7 +326,9 @@ class oneton():
                     if self.debug>1: print 'oneton.oneEvent process',option,'yield',y
                     for ct in cost:
                         dist = random.uniform(0.,pathlength) # start OP at random point on this sample of track
-                        gDir = self.makeRotatedUnitVector(tDir,ct,random.uniform(0.,self.twopi)) 
+                        ranphi = random.uniform(0.,self.twopi)
+                        #gDir = self.makeRotatedUnitVector(tDir,ct,ranphi)
+                        gDir= self.makeRUV(tDir,ct,ranphi)
                         vector = self.makeOpticalPhotonTrack(X1,tDir,dist,gDir)
                         PhotonVectors.append( [vector, option, self.options[option] ] )
                     OpticalPhotons.extend( OP )
@@ -515,9 +512,10 @@ class oneton():
                 #KE = 475. # 2000.
                 tStart = [0., 0., -1250+12.]
                 tDir = [.0, 0.0, -1.]
-                tStart = [0., 0., -12.]
+                #tStart = [0., 0., -12.]
                 tStart = [self.Detector[0]-10.,0.,self.Detector[2]/2]
-                tDir = [1., 0., 0.]
+                tStart = [0.,0.,self.Detector[2]/2.]
+                tDir = [-1., 0., 0.]
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')
@@ -557,7 +555,7 @@ if __name__ == '__main__' :
     if 1: 
         print ''
         nC = 1
-        nS = 1
+        nS = 0
         nE = 1
         Save = 'All'
         mode = 'Better'
