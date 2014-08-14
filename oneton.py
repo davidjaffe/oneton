@@ -151,11 +151,10 @@ class oneton():
             y2 = unitV[1]*dist + y1
             vector = [ [x1,y1,z1], [x2,y2,z2] ]
             if self.debug>2:
-                print 'oneton.makeVector: tStart',tStart,'tDir',tDir
-                print 'oneton.makeVector: initial',vector
+                print 'oneton.makeVector: tStart',tStart,'tDir',tDir,'initial vector',vector
             # place end of vector on detector wall or end            
             vector = self.traj.getImpact( vector, self.Detector )
-            if self.debug>2: print 'oneton.makeVector up-/downward trajectory. vector',vector
+            if self.debug>2: print 'oneton.makeVector: up-/downward trajectory. final vector',vector
         return vector
     def makeOpticalPhotonTrack(self, tStart,tDir, D, gDir):
         '''
@@ -180,19 +179,6 @@ class oneton():
         st = math.sqrt(1. - ct*ct)
         U = [math.cos(f)*st,math.sin(f)*st,ct]
         return U
-    def resolveUnitToMatrix(self, tDir):
-        '''
-        resolve the input unit vector into a matrix to be applied to the z-unit vector
-        tDir = M * (0,0,1)
-        return M
-        '''
-        ct = tDir[2]
-        st = math.sqrt(1. - ct*ct)
-        phi = math.atan2(tDir[1],tDir[0])
-        cp = math.cos(phi)
-        sp = math.sin(phi)
-        M = numpy.array([cp*ct,-sp,cp*st,  sp*ct,cp,sp*st, -st,0.,ct]).reshape(3,3)
-        return M
     def makeRUV(self, tDir, cost, phi):
         '''
         return unit vector gDir that is at angle theta (acos(cost)) wrt tDir and rotated
@@ -210,7 +196,7 @@ class oneton():
         ## now do rotation about t of angle phi
         g = self.ERvector(v,t,phi)
         # render as list instead of array
-        gDir = [ g[0], g[1], g[2] ]
+        gDir = [ -g[0], -g[1], -g[2] ]
         return gDir
     def ERvector(self,x1,AXIS,phi):
         '''
@@ -223,51 +209,28 @@ class oneton():
         wx = numpy.cross(w,x1)
         x2 = x1 + 2.*a*wx + 2*numpy.cross(w,wx)
         return x2
-    
-    def rotation_matrix(self,AXIS,theta):
-        axis = numpy.array( AXIS )
-        axis = axis/math.sqrt(numpy.dot(axis,axis))
-        a = math.cos(theta/2)
-        b,c,d = -axis*math.sin(theta/2)
-        
-        M =  numpy.array([[a*a+b*b-c*c-d*d, 2*(b*c-a*d), 2*(b*d+a*c)],
-                          [2*(b*c+a*d), a*a+c*c-b*b-d*d, 2*(c*d-a*b)],
-                          [2*(b*d-a*c), 2*(c*d+a*b), a*a+d*d-b*b-c*c]])
-        return M
-        
-    def makeRotatedUnitVector(self, tDir, cost, phi): #, gamma=None):
+    def niceString(self,v):
         '''
-        create unit vector by apply a rotation about the z axis by theta
-        followed by a rotation about the new x` axis by phi to the input unit vector tDir
+        return  nice string for input list
         '''
-        ct = cost
-        st = math.sqrt(1.-ct*ct)
-        Ttheta = numpy.array([1,0,0, 0,ct,st, 0,-st,ct]).reshape(3,3)
-        cp = math.cos(phi)
-        sp = math.sin(phi)
-        Tphi = numpy.array([cp,sp,0., -sp,cp,0., 0.,0.,1.]).reshape(3,3)
-        #gam = gamma
-        #if gamma is None: gam = random.uniform(0.,self.twopi)
-        #cg = math.cos(gam)
-        #sg = math.sin(gam)
-        #Tgam = numpy.array([cg,0,-sg, 0,1,0, sg,0,cg]).reshape(3,3)
-        T = numpy.dot(Tphi,Ttheta)
-        v = numpy.array(tDir)
-        w = numpy.dot(T,v)
-        a,b,c = w
-        gDir = [a,b,c]
-        gDir = self.normVector(gDir)
-        if self.debug>2:
-            calcct = gDir[0]*tDir[0]+gDir[1]*tDir[1]+gDir[2]*tDir[2]
-            print 'oneton.makeRotatedUnitVector: tDir',tDir,'ct',ct,'phi',phi,'gDir',gDir,\
-                  'v',v,'w',w,'calcct',calcct,'\nT',T
-        return gDir
+        s = ''
+        l = len(v)
+        for i,f in enumerate(v):
+            if type(f) is str:
+                s += f
+            elif type(f) is float:
+                s += '{0:4.2f}'.format(f)
+            else:
+                s += str(f)
+            if i<l-1: s+=', '
+        return s
     def oneEvent(self, particle, material, KE, tStart, tDir=[0.,0.,-1.], processes=[]):
         '''
         generate an event taking into account energy loss, initial start point and
         initial direction.
         return a list of photon tracks and a list of wavelengths
         '''
+        print 'oneton.oneEvent:',particle,'in',material,'KE(MeV)',KE,'Initial pos',self.niceString(tStart),' & Direction',self.niceString(tDir),'processes',self.niceString(processes)
         ### has event with these input parameters already been generated?
         inputPar = [particle, material, KE, tStart, tDir]
         found = False
@@ -327,7 +290,6 @@ class oneton():
                     for ct in cost:
                         dist = random.uniform(0.,pathlength) # start OP at random point on this sample of track
                         ranphi = random.uniform(0.,self.twopi)
-                        #gDir = self.makeRotatedUnitVector(tDir,ct,ranphi)
                         gDir= self.makeRUV(tDir,ct,ranphi)
                         vector = self.makeOpticalPhotonTrack(X1,tDir,dist,gDir)
                         PhotonVectors.append( [vector, option, self.options[option] ] )
@@ -343,7 +305,7 @@ class oneton():
                     fake = []
                     for j in range(len(OPscint)):
                         dist = random.uniform(0.,pathlength)
-                        gDir = self.makeRotatedUnitVector(tDir,random.uniform(-1.,1),random.uniform(0.,self.twopi))
+                        gDir = self.makeRUV(tDir,random.uniform(-1.,1),random.uniform(0.,self.twopi))
                         vector = self.makeOpticalPhotonTrack(X1,tDir,dist,gDir)
                         PhotonVectors.append( [vector, option, self.options[option] ] )
                         fake.append( -2. )
@@ -429,12 +391,21 @@ class oneton():
             if x-self.PMTradius>0:
                 xyzPMT.append( [x, 0., ztop, self.PMTradius, False] )
                 xyzPMT.append( [-x, 0., ztop, self.PMTradius, False] )
-        print '{0:4} {1:8} {2:8} {3:8} '.format('PMT#','x','y','z')
+        # make a table
+        ncol = 4
+        line = ''
+        for icol in range(ncol):
+            line += '{0:4} {1:>8} {2:>8} {3:>9}      '.format('PMT#','x','y','z')
+        print line
+        line = ''
         for i,pmt in enumerate(xyzPMT):
             position = 'Vert'
             if pmt[4]: position = 'Side'
-            #position = 'Side'
-            print '{0:4} {1:>8.3f} {2:>8.3f} {3:>8.3f} {4}'.format(i,pmt[0],pmt[1],pmt[2],position)
+            line += '{0:4} {1:>8.3f} {2:>8.3f} {3:>9.3f} {4}'.format(i,pmt[0],pmt[1],pmt[2],position)
+            if (i+1)%ncol==0:
+                print line
+                line = ''
+        if len(line)>0: print line
         return xyzPMT
     def hitPMT(self,photonT,xyzPMT):
         '''
@@ -468,7 +439,7 @@ class oneton():
         '''
         for each photon   start     end       0/1   
         ntuple variables: x1,y1,z1, x2,y2,z2, iopt, ipmt, wl, qe, attenuation factor
-        iopt = 0 = Cerenkov, 1 = Scintillation
+        iopt = 0 = Cerenkov, 1 = Scintillation, -2 = drawDet
         '''
         track, option, iopt = photon
         X1, X2 = track
@@ -483,6 +454,25 @@ class oneton():
         s += ' \n'
         fopen.write(s)
         return
+    def drawDet(self,fopen):
+        '''
+        add entries to ntuple to enable drawing of detector
+        '''
+        iopt = -2
+        ipmt, wl, qe, att = -99,-1,-1,-1
+        option = 'drawDet'
+        X2 = [0,0,0]
+        radius, ztop, zbottom = self.Detector
+        for z in [ztop,zbottom]:
+            for phi in [0., math.pi/2., math.pi, math.pi*3/2.]:
+                x = radius*math.cos(phi)
+                y = radius*math.sin(phi)
+                X1 = [x,y,z]
+                track = [X1,X2]
+                photon = [track, option, iopt]
+                self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
+        return
+                
     def standardRun(self, nE, nC, nS, prefn='photons', Save='All', mode='Simple'):
         '''
         Simple mode:
@@ -500,6 +490,7 @@ class oneton():
         filename = self.pawDir  + prefn + unique + '.nt'
         fopen = open(filename,'w')
         print 'oneton.standardRun: Opened',filename
+        self.drawDet(fopen)
         for iEvt in range(nE):
             print 'Event#',iEvt,'Save',Save,'mode',mode
             if mode.lower()=='simple':
@@ -514,8 +505,23 @@ class oneton():
                 tDir = [.0, 0.0, -1.]
                 #tStart = [0., 0., -12.]
                 tStart = [self.Detector[0]-10.,0.,self.Detector[2]/2]
-                tStart = [0.,0.,self.Detector[2]/2.]
-                tDir = [-1., 0., 0.]
+
+                # good for directionality check
+                if 0:
+                    particle = 'proton'
+                    KE = 2000.
+                    tStart = [0.,0.,self.Detector[2]/2.]
+                    tDir = [-1., 0., 0.]
+
+                # random position and direction
+                particle = 'e-'
+                KE = 50.
+                ranphi = random.uniform(0.,self.twopi)
+                ranrad = random.uniform(0.,self.Detector[0])
+                ranz   = random.uniform(self.Detector[2],0.)
+                tStart = [ranrad*math.cos(ranphi),ranrad*math.sin(ranphi),ranz]
+                tDir = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1)]
+                
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')
@@ -555,7 +561,7 @@ if __name__ == '__main__' :
     if 1: 
         print ''
         nC = 1
-        nS = 0
+        nS = 1
         nE = 1
         Save = 'All'
         mode = 'Better'

@@ -121,10 +121,29 @@ class trajectory():
         r = math.sqrt(x2*x2 + y2*y2)
         if r<=radcyl: return photonTrack # hits bottom or top of cylinder
         x1,y1,z1 = X1
-        zhit = z1 - radcyl/r*(z1-z2)
-        phi = math.atan2(y2-y1,x2-x1)
-        xhit = x1 + radcyl*math.cos(phi)
-        yhit = y1 + radcyl*math.sin(phi)
+        # calculate distance to impact in x,y plane
+        dxy = math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+        ux = (x2-x1)/dxy
+        uy = (y2-y1)/dxy
+        b = x1*ux + y1*uy
+        s = b*b - (x1*x1 + y1*y1 - radcyl*radcyl)
+        if s<=0.:
+            words = 'trajectory.getImpact: cannot calculate impact on cylinder wall'
+            sys.exit(words)
+        else:
+            s = math.sqrt(s)
+            dp = -b + s
+            dm = -b - s
+            if dp>=0. and dm<0.:
+                d = dp
+            elif dp<0. and dm>=0.:
+                d = dm
+            else:
+                words = 'trajectory.getImpact: ERROR two solutions. dpos='+str(dp)+' dneg='+str(dm)
+                sys.exit(words)
+            xhit = x1 + ux*d
+            yhit = y1 + uy*d
+            zhit = z1 + (z2-z1)*d/dxy
         X2 = [xhit,yhit,zhit]
         return [ X1, X2 ]
     def mag(self,v):
