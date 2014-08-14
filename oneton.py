@@ -55,6 +55,7 @@ class oneton():
         self.Photons = photons.photons(wl1=self.wlRange[0], wl2=self.wlRange[1] )
 
         self.downward = [0., 0., -1.] # unit vector pointing down
+        self.upward   = [0., 0.,  1.] # unit vector pointing up
         self.twopi = 2.*math.pi
         self.options = {'Cerenkov':0, 'Scint':1}
 
@@ -195,8 +196,10 @@ class oneton():
         v = self.ERvector(t,r,math.acos(cost))
         ## now do rotation about t of angle phi
         g = self.ERvector(v,t,phi)
+        ### resolve ambiguity(?)
+        if abs(numpy.dot(t,g)-cost)>1e-10: g = -g
         # render as list instead of array
-        gDir = [ -g[0], -g[1], -g[2] ]
+        gDir = [ g[0], g[1], g[2] ]
         return gDir
     def ERvector(self,x1,AXIS,phi):
         '''
@@ -529,11 +532,26 @@ class oneton():
                     KE = 2000.
                     tStart = [0.,0.,self.Detector[2]/2.]
                     tDir = [-1., 0., 0.]
+                if 1:
+                    particle = 'e-'
+                    KE = 250.
+                    tStart = [-self.Detector[0]/3,-self.Detector[0]/2,self.Detector[2]/2]
+                    tDir = [-1.,-1.,-1.]
 
                 # random position and direction
-                particle = 'e-'
-                KE = 150.
-                tStart, tDir = self.ranPosDir()
+                if 0:
+                    particle = 'e-'
+                    KE = 150.
+                    tStart, tDir = self.ranPosDir()
+
+                # cosmic
+                if 0:
+                    particle = 'mu+'
+                    KE = 10000.
+                    tStart = [0., 0., 0.]
+                    tDir = self.downward
+
+
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')
