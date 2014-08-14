@@ -456,15 +456,22 @@ class oneton():
         return
     def drawDet(self,fopen):
         '''
-        add entries to ntuple to enable drawing of detector
+        add entries to ntuple to enable drawing of detector.
+        Need more than just extrema if only a portion of detector is to be drawn
         '''
         iopt = -2
         ipmt, wl, qe, att = -99,-1,-1,-1
         option = 'drawDet'
         X2 = [0,0,0]
         radius, ztop, zbottom = self.Detector
-        for z in [ztop,zbottom]:
-            for phi in [0., math.pi/2., math.pi, math.pi*3/2.]:
+        nz = 10
+        dz = (ztop-zbottom)/float(nz)
+        nphi = 10
+        dphi = self.twopi/float(nphi)
+        for iz in range(nz):
+            z = float(iz)*dz + zbottom
+            for iphi in range(nphi):
+                phi = float(iphi)*dphi 
                 x = radius*math.cos(phi)
                 y = radius*math.sin(phi)
                 X1 = [x,y,z]
@@ -472,7 +479,17 @@ class oneton():
                 photon = [track, option, iopt]
                 self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
         return
-                
+    def ranPosDir(self):
+        '''
+        return random position vector and direction unit vector
+        '''
+        ranphi = random.uniform(0.,self.twopi)
+        ranrad = random.uniform(0.,self.Detector[0])
+        ranz   = random.uniform(self.Detector[2],0.)
+        tStart = [ranrad*math.cos(ranphi),ranrad*math.sin(ranphi),ranz]
+        tDir = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1)]
+        tDir = self.normVector(tDir)
+        return tStart,tDir
     def standardRun(self, nE, nC, nS, prefn='photons', Save='All', mode='Simple'):
         '''
         Simple mode:
@@ -515,12 +532,8 @@ class oneton():
 
                 # random position and direction
                 particle = 'e-'
-                KE = 50.
-                ranphi = random.uniform(0.,self.twopi)
-                ranrad = random.uniform(0.,self.Detector[0])
-                ranz   = random.uniform(self.Detector[2],0.)
-                tStart = [ranrad*math.cos(ranphi),ranrad*math.sin(ranphi),ranz]
-                tDir = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1)]
+                KE = 150.
+                tStart, tDir = self.ranPosDir()
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')

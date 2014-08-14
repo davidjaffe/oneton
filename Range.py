@@ -12,11 +12,16 @@ class Range():
         # where is the range, dE/dx data?
         self.ESTARdir = 'ESTAR/'
         self.PSTARdir = 'PSTAR/'
+        self.MUSTARdir= 'MUONSTOP/muonloss_'
         self.dirs = {self.ESTARdir: ['electron', 'positron', 'e-', 'e+'],\
-                     self.PSTARdir: ['proton', 'antiproton', 'p', 'pbar'] }
+                     self.PSTARdir: ['proton', 'antiproton', 'p', 'pbar'],\
+                     self.MUSTARdir:['muon','antimuon','mu+','mu-']\
+                     }
         # what is the meaning of each column in the data files
         self.columns = {self.ESTARdir: [ {'KE':0}, {'TotalStoppingPower': 3}, {'CSDA Range': 4} ],\
-                        self.PSTARdir: [ {'KE':0}, {'TotalStoppingPower': 3}, {'CSDA Range': 4} ] }
+                        self.PSTARdir: [ {'KE':0}, {'TotalStoppingPower': 3}, {'CSDA Range': 4} ],\
+                        self.MUSTARdir:[ {'KE':2}, {'TotalStoppingPower': 9}, {'CSDA Range': 10} ]\
+                            }
         # map of material name to aliases, valid particle types and density (g/cm3)
         self.Materials = {'water' : [ ['liquidwater', 'water'] , ['electron','positron'], 1.00 ],\
                           'toluene': [ ['toluene'], ['electron', 'positron'], 8.66900E-01 ] }
@@ -98,19 +103,27 @@ class Range():
                 if 'TotalStoppingPower' in d: iStoppingPower = d['TotalStoppingPower']
                 if 'CSDA Range' in d: iRange = d['CSDA Range']
             f = open(fn,'r')
+            ignoredLines = ''
             for line in f:
                 if line[0] is not '*':
                     a = line.split(' ')
+                    #print line[:-1]
+                    #print a
                     KE = float(a[iKE])
                     # convert stopping power to MeV/cm and range to cm
                     StoppingPower = float(a[iStoppingPower]) * density
-                    Range = float(a[iRange])/density 
-                    self.Table[key].append( [KE, StoppingPower, Range] )
-                    self.KEtable[key].append( KE )
-                    self.dEdxtable[key].append( StoppingPower )
-                    self.CSDAtable[key].append( Range )
+                    try:
+                        Range = float(a[iRange])/density
+                    except:
+                        ignoredLines += 'range.getTable Ignored '+line
+                    else:
+                        self.Table[key].append( [KE, StoppingPower, Range] )
+                        self.KEtable[key].append( KE )
+                        self.dEdxtable[key].append( StoppingPower )
+                        self.CSDAtable[key].append( Range )
             f.close()
             print 'range.getTable for particle',particle,'& material',matAlias,'with key',key,'from filename',fn
+            if len(ignoredLines)>0: print ignoredLines
         else:
             print 'range.getTable key',key,'exists for particle',particle,'& material',matAlias
         return key
@@ -204,15 +217,27 @@ class Range():
         return
 if __name__ == '__main__' :
     r = Range()
-    if 0: 
+    if 0:
+        k = r.getTable('muon','liquidwater')
         k = r.getTable('electron','liquidwater')
         k = r.getTable('electron','water')
         k = r.getTable('electron','toluene')
         k = r.getTable('p','toluene')
-    KEs = [2.283]
-    thick = [10.]
-    for ke,t in zip(KEs,thick):
-        totR, finalKE, samples = r.propagate('electron','water',ke,t)
-        print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
-        r.printSampleTable(samples)
+    etest = 0
+    if etest:
+        KEs = [2.283]
+        thick = [10.]
+        for ke,t in zip(KEs,thick):
+            totR, finalKE, samples = r.propagate('electron','water',ke,t)
+            print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
+            r.printSampleTable(samples)
+    mutest = 1
+    if mutest:
+        KEs = [2000.]
+        thick = [1.]
+        for ke,t in zip(KEs,thick):
+            totR, finalKE, samples = r.propagate('muon','water',ke,t)
+            print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
+            r.printSampleTable(samples)
             
+
