@@ -7,6 +7,7 @@ utilities associated with particle trajectories
 import math
 import sys
 import random
+import copy
 
 class trajectory():
     def __init__(self):
@@ -115,7 +116,7 @@ class trajectory():
         '''
         put the endpoint of the input photoTrack on the cylinder (radius, ztop, zbottom)
         '''
-        X1,X2 = photonTrack
+        X1,X2 = copy.copy( photonTrack )
         radcyl,ztop,zbottom = Cylinder
         x2,y2,z2 = X2
         r = math.sqrt(x2*x2 + y2*y2)
@@ -145,7 +146,19 @@ class trajectory():
             yhit = y1 + uy*d
             zhit = z1 + (z2-z1)*d/dxy
         X2 = [xhit,yhit,zhit]
+        # numskull check. initial and final directions same?
+        col,dotprod = self.collinear( photonTrack,  [X1,X2]  )
+        if not col:
+            print 'trajectory.getImpact: ERROR inital',self.makeVec(photonTrack),'final',self.makeVec( [X1,X2] ),'photon track not collinear. dotprod',dotprod
         return [ X1, X2 ]
+    def collinear(self, V1, V2):
+        '''
+        return 
+        true if input vectors (defined by endpoints) are collinear
+        and dotproduct
+        '''
+        col = self.trackAngle( V1, V2 )
+        return col>(1.-1e-10), col
     def mag(self,v):
         m = 0.
         for i in range(len(v)):
@@ -154,16 +167,16 @@ class trajectory():
     def dot(self,v1,v2):
         m = 0.
         if len(v1)!=len(v2):
-            print 'dot: ERROR len(v1),len(v2)',len(v1),len(v2)
+            print 'dot: ERROR len(v1),len(v2)',len(v1),len(v2),'v1',v1,'v2',v2
             sys.exit(5)
         for i in range(len(v1)):
             m += v1[i]*v2[i]
-        m = m/mag(v1)/mag(v2)
+        m = m/self.mag(v1)/self.mag(v2)
         return m
     def trackAngle(self,track1, track2): # return cosine of angle between 2 tracks
-        v1 = makeVec(track1)
-        v2 = makeVec(track2)
-        return dot(v1,v2)
+        v1 = self.makeVec(track1)
+        v2 = self.makeVec(track2)
+        return self.dot(v1,v2)
     def makeVec(self,t):
         return [ t[1][0] - t[0][0],  t[1][1] - t[0][1],  t[1][2] - t[0][2] ]
     

@@ -147,10 +147,14 @@ class oneton():
                 z2 = zbottom
             else:
                 z2 = ztop
-            dist = (z1-z2)/unitV[2]
+            dist = abs( (z1-z2)/unitV[2] )
             x2 = unitV[0]*dist + x1
             y2 = unitV[1]*dist + y1
             vector = [ [x1,y1,z1], [x2,y2,z2] ]
+            col,dotprod = self.traj.collinear( vector, [[0,0,0],tDir])
+            if not col:
+                print 'oneton.makeVector: ERROR vector',vector,'tDir',tDir,'NOT COLLINEAR prior to getImpact. dotprod',dotprod
+                print 'oneton.makeVector: dist',dist,'z2-z1',z2-z1,'unitV[2]',unitV[2]
             if self.debug>2:
                 print 'oneton.makeVector: tStart',tStart,'tDir',tDir,'initial vector',vector
             # place end of vector on detector wall or end            
@@ -167,6 +171,10 @@ class oneton():
         for u,t in zip(tDir,tStart):
             X1.append( u*D + t )
         vector = self.makeVector( X1, gDir)
+        col,dotprod = self.traj.collinear( vector, [ [0,0,0], gDir])
+        if not col:
+            print 'oneton.makeOpticalPhotonTrack: tStart',tStart,'tDir',tDir,'D',D,'gDir',gDir,'X1',X1,'vector',vector,'col',col,'dotprod',dotprod
+            print 'oneton.makeOpticalPhotonTrack: ERROR photon track',vector,'not collinear with unit vector',gDir,'dotprod',dotprod
         return vector
     def createUnitVector(self,cost=None,phi=None):
         '''
@@ -197,7 +205,10 @@ class oneton():
         ## now do rotation about t of angle phi
         g = self.ERvector(v,t,phi)
         ### resolve ambiguity(?)
-        if abs(numpy.dot(t,g)-cost)>1e-10: g = -g
+        #print 'makeRUV:t',t,'g',g,'numpy.dot(t,g)',numpy.dot(t,g),'cost',cost
+        if abs(numpy.dot(t,g)-cost)>1e-10:
+            print 'vector reversed cost',cost,'phi',phi
+            g = -g
         # render as list instead of array
         gDir = [ g[0], g[1], g[2] ]
         return gDir
@@ -233,7 +244,6 @@ class oneton():
         initial direction.
         return a list of photon tracks and a list of wavelengths
         '''
-        print 'oneton.oneEvent:',particle,'in',material,'KE(MeV)',KE,'Initial pos',self.niceString(tStart),' & Direction',self.niceString(tDir),'processes',self.niceString(processes)
         ### has event with these input parameters already been generated?
         inputPar = [particle, material, KE, tStart, tDir]
         found = False
@@ -274,6 +284,8 @@ class oneton():
             X2[i] = totR*u + X1[i]
         track = [ X1, X2]
         if self.debug>2: print 'oneton.oneEvent track',track
+
+        print 'oneton.oneEvent totR',totR,'finalKE',finalKE,'nSamples',len(samples)
 
         ### generate cerenkov and scintillation photons on track using samples
         ### Cerenkov: for each sample generate the energy and cos(theta) of each photon
@@ -493,7 +505,7 @@ class oneton():
         tDir = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1)]
         tDir = self.normVector(tDir)
         return tStart,tDir
-    def standardRun(self, nE, nC, nS, prefn='photons', Save='All', mode='Simple'):
+    def standardRun(self, nE, nC, nS, prefn='photons', Save='All', mode='Simple', ioption=-1):
         '''
         Simple mode:
         create a run of nE events with nC Cerenkov photons and nS Scint. photons per event
@@ -519,43 +531,80 @@ class oneton():
                 particle = 'e-'
                 material = 'water'
                 KE = 2.28
-                #particle = 'proton'
-                #KE = 475. # 2000.
-                tStart = [0., 0., -1250+12.]
-                tDir = [.0, 0.0, -1.]
-                #tStart = [0., 0., -12.]
                 tStart = [self.Detector[0]-10.,0.,self.Detector[2]/2]
 
+                msg = 'ioption='+str(ioption)
                 # good for directionality check
-                if 0:
+                if ioption==1:
                     particle = 'proton'
                     KE = 2000.
                     tStart = [0.,0.,self.Detector[2]/2.]
                     tDir = [-1., 0., 0.]
-                if 1:
+                    msg += ' dir check with p'
+                elif ioption==2:
                     particle = 'e-'
                     KE = 250.
                     tStart = [-self.Detector[0]/3,-self.Detector[0]/2,self.Detector[2]/2]
                     tDir = [-1.,-1.,-1.]
-
+                    msg += ' dir check with e-'
                 # random position and direction
-                if 0:
+                elif ioption==3:
                     particle = 'e-'
                     KE = 150.
                     tStart, tDir = self.ranPosDir()
-
+                    msg += ' e- random pos,dir'
                 # cosmic
-                if 0:
+                elif ioption==4:
                     particle = 'mu+'
                     KE = 10000.
                     tStart = [0., 0., 0.]
                     tDir = self.downward
+                    msg += ' cosmic mu+'
+                # point at top
+                elif ioption in [5,6,7,8]:
+                    particle = 'e+'
+                    KE = 5.
+                    if ioption==5: tStart = [0.5*self.Detector[0],0.5*self.Detector[0], -100.]
+                    if ioption==6: tStart = [0.5*self.Detector[0],-0.5*self.Detector[0], -100.]
+                    if ioption==7: tStart = [-0.5*self.Detector[0],0.5*self.Detector[0], -100.]
+                    if ioption==8: tStart = [-0.5*self.Detector[0],-0.5*self.Detector[0], -100.]
+                    tDir = self.upward
+                    msg = 'upward at top'
+                # point at bottom
+                elif ioption in [9,10,11,12]:
+                    particle = 'e+'
+                    KE = 5.
+                    if ioption== 9: tStart = [0.5*self.Detector[0],0.5*self.Detector[0], -1100.]
+                    if ioption==10: tStart = [0.5*self.Detector[0],-0.5*self.Detector[0], -1100.]
+                    if ioption==11: tStart = [-0.5*self.Detector[0],0.5*self.Detector[0], -1100.]
+                    if ioption==12: tStart = [-0.5*self.Detector[0],-0.5*self.Detector[0], -1100.]
+                    tDir = self.downward
+                    msg = 'downward at bottom'
+                # point at side
+                elif ioption in [13,14,15]:
+                    particle = 'e+'
+                    KE = 5.
+                    if ioption==13:
+                        tStart = [0.5*self.Detector[0],0.5*self.Detector[0], -555.]
+                        tDir   = [1., 1., 0.1]
+                    if ioption==14:
+                        tStart = [-0.5*self.Detector[0],-0.5*self.Detector[0], -555.]
+                        tDir   = [-1.,-1.,-0.1]
+                    if ioption==15:
+                        tStart = [-0.25*self.Detector[0],-0.5*self.Detector[0], -555.]
+                        tDir   = [-.5,-1.,-0.]
+                    
+                    msg = 'outward at side'
 
 
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')
+
+                msg += ' '+particle+' in '+material+' KE '+str(KE)
+                msg += ' Pos'+self.niceString(tStart)+' & Dir '+self.niceString(tDir)+' '+self.niceString(processes)
+                print msg
                 energys,photons = self.oneEvent(particle, material, KE, tStart, tDir=tDir,processes=processes)
                 
             for j,photon in enumerate(photons):
@@ -575,30 +624,26 @@ class oneton():
                     att = self.Photons.getAtten( wl, length, medium='water')
                     self.makeNtuple(fopen, photon, ipmt, wl, qe, att)
         fopen.close()
+        print 'exec oneton#valid',filename,' ! ','\'',msg,'\''
         return
 if __name__ == '__main__' :
+    if len(sys.argv)>1:
+        if 'help' in sys.argv[1].lower():
+            print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption'
+            sys.exit()
+
     ton = oneton()
-    if 0:
-        particle = 'e-'
-        material = 'water'
-        KE = 2.28
-        tStart = [0., 0., -1230.]
-        tDir = [0., 0., -1.]
-        processes = ['Scint','Cerenkov']
-        OPenergys,OPtracks = ton.oneEvent(particle, material, KE, tStart, tDir=tDir,processes=processes)
-        for E,track in zip(OPenergys,OPtracks):
-            print E,track
-    
-    if 1: 
-        print ''
-        nC = 1
-        nS = 1
-        nE = 1
-        Save = 'All'
-        mode = 'Better'
-        if len(sys.argv)>1: nC = int(sys.argv[1])
-        if len(sys.argv)>2: nS = int(sys.argv[2])
-        if len(sys.argv)>3: nE = int(sys.argv[3])
-        if len(sys.argv)>4: Save = sys.argv[4]
-        ton.standardRun(nE,nC,nS,Save=Save,mode=mode)
+    print ''
+    nC = 1
+    nS = 1
+    nE = 1
+    ioption = 1
+    Save = 'All'
+    mode = 'Better'
+    if len(sys.argv)>1: nC = int(sys.argv[1])
+    if len(sys.argv)>2: nS = int(sys.argv[2])
+    if len(sys.argv)>3: nE = int(sys.argv[3])
+    if len(sys.argv)>4: Save = sys.argv[4]
+    if len(sys.argv)>5: ioption = int(sys.argv[5])
+    ton.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
 
