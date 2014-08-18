@@ -483,6 +483,7 @@ class oneton():
         dz = (ztop-zbottom)/float(nz)
         nphi = 10
         dphi = self.twopi/float(nphi)
+        ## side
         for iz in range(nz):
             z = float(iz)*dz + zbottom
             for iphi in range(nphi):
@@ -493,6 +494,19 @@ class oneton():
                 track = [X1,X2]
                 photon = [track, option, iopt]
                 self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
+        ## top and bottom
+        for z in [ztop, zbottom]:
+            for irad in range(3):
+                rad = radius/float(irad+1)
+                for iphi in range(nphi):
+                    phi = float(iphi)*dphi 
+                    x = rad*math.cos(phi)
+                    y = rad*math.sin(phi)
+                    X1 = [x,y,z]
+                    track = [X1,X2]
+                    photon = [track, option, iopt]
+                    self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
+                
         return
     def ranPosDir(self):
         '''
@@ -593,16 +607,23 @@ class oneton():
                     if ioption==15:
                         tStart = [-0.25*self.Detector[0],-0.5*self.Detector[0], -555.]
                         tDir   = [-.5,-1.,-0.]
-                    
                     msg = 'outward at side'
-
-
+                # beta spectrum (eventually)
+                # 90Sr38 -> 90Y39 ->
+                elif ioption==16:
+                    particle = 'e-'
+                    Tmax = 2.283 
+                    KE = random.uniform(0.,Tmax)
+                    tStart = [0.,25.,self.Detector[2]+100.]
+                    tDir = self.downward
+                    msg = '90Sr near bottom, pointed down'
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')
                 if nS>0: processes.append('Scint')
 
-                msg += ' '+particle+' in '+material+' KE '+str(KE)
+                msg += ' '+particle+' in '+material+' KE '
+                msg += '{0:.3f}'.format(KE)
                 msg += ' Pos'+self.niceString(tStart)+' & Dir '+self.niceString(tDir)+' '+self.niceString(processes)
                 print msg
                 energys,photons = self.oneEvent(particle, material, KE, tStart, tDir=tDir,processes=processes)
