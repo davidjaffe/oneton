@@ -14,6 +14,7 @@ import Range
 import cerenkov
 import numpy
 import copy
+import ParticleProperties
 
 class oneton():
     def __init__(self):
@@ -24,6 +25,7 @@ class oneton():
         self.traj = trajectory.trajectory()
         self.Range = Range.Range()
         self.cerenkov = cerenkov.cerenkov()
+        self.ParticleProperties = ParticleProperties.ParticleProperties()
 
         # output directory for ntuple
         self.pawDir = '/Users/djaffe/work/paw/ONETON/'
@@ -59,9 +61,54 @@ class oneton():
         self.twopi = 2.*math.pi
         self.options = {'Cerenkov':0, 'Scint':1}
 
+        self.me = self.ParticleProperties.getMass('electron')
+        self.betaSpec = {}
+        self.betaBins = 10000
+
         self.savedEvents = {}
         self.savedEventKeys = {}
         return
+    def betaSpectrum(self,T,Tmax):
+        '''
+        return value of beta spectrum for input kinetic energy and
+        max KE. Neglect matrix element.
+        from Elements of Nuclear Physics, Meyerhof, eqn4-141
+        '''
+        if T<=0. or T>=Tmax: return 0.
+        p = math.sqrt(T*T + 2.*T*self.me)
+        r = p * (T+self.me) * (Tmax-T)*(Tmax-T)
+        return r
+    def closest(self,a,l):
+        f = lambda a,l:min(l,key=lambda x:abs(x-a))
+        return f(a,l)
+    def genBeta(self,Tmax):
+        '''
+        randomly generate electron KE from a beta decay given the max KE (Tmax).
+        Check to see if a normalized cumulative integral spectrum has already been generated for the input Tmax,
+        if not, generate it.
+        '''
+        dT = Tmax/float(self.betaBins)
+        if Tmax in self.betaSpec:
+            cumInt = self.betaSpec[Tmax]
+        else:
+            cumInt = []
+            c = 0.
+            for iT in range(self.betaBins):
+                T = dT/2. + float(iT)*dT
+                c += self.betaSpectrum(T,Tmax)
+                cumInt.append( c )
+            for i,b in enumerate(cumInt):
+                cumInt[i] = b/c
+            self.betaSpec[Tmax] = cumInt
+        ## generate a beta energy
+        a = random.uniform(0.,1.)
+        f = self.closest(a,cumInt)
+        d = a-f
+        i = cumInt.index(f)
+        if d>0: j = min(i+1,self.betaBins-1)
+        if d<0: j = max(0,i-1)
+        Ebeta = float(i)*dT + d/abs(cumInt[i]-cumInt[j])*dT
+        return Ebeta
     def oneSimpleEvent(self, nCerenkov=1, nScint=1):
         zc = [self.Detector[1], self.Detector[2]]
         beamTrack = self.traj.makeTrack(self.HodoWidth, zc, option='Pencil')
@@ -608,15 +655,23 @@ class oneton():
                         tStart = [-0.25*self.Detector[0],-0.5*self.Detector[0], -555.]
                         tDir   = [-.5,-1.,-0.]
                     msg = 'outward at side'
-                # beta spectrum (eventually)
-                # 90Sr38 -> 90Y39 ->
-                elif ioption==16:
+                # beta spectrum
+                # Tmax of 2.2801 corresponds to 90Y39 decay (90Sr daughter)
+                # Tmax of 3.541  corresponds to 106Rh decay (106Ru daughter)
+                elif ioption in [16,17]:
                     particle = 'e-'
-                    Tmax = 2.283 
-                    KE = random.uniform(0.,Tmax)
+                    KE = 0.
+                    isotope = 'NONE'
+                    if ioption==16: 
+                        Tmax = 2.2801
+                        isotope = '90Sr'
+                    if ioption==17:
+                        Tmax = 3.541
+                        isotope = '106Ru'
+                    KE = self.genBeta(Tmax)
                     tStart = [0.,25.,self.Detector[2]+100.]
                     tDir = self.downward
-                    msg = '90Sr near bottom, pointed down'
+                    msg = isotope + ' near bottom, pointed down'
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')
