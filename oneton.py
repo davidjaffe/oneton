@@ -17,7 +17,7 @@ import copy
 import ParticleProperties
 
 class oneton():
-    def __init__(self):
+    def __init__(self,option='oneton'):
 
         self.debug = 0
 
@@ -28,27 +28,45 @@ class oneton():
         self.ParticleProperties = ParticleProperties.ParticleProperties()
 
         # output directory for ntuple
-        self.pawDir = '/Users/djaffe/work/paw/ONETON/'
+        self.detectorName = None
+        if option.lower()=='oneton':
+            self.detectorName = 'OneTon'
+            self.pawDir = '/Users/djaffe/work/paw/ONETON/'
+            # construct detector
+            # coordinate system has z=0 at top, positive z pointing up
+            ID = 995.
+            IH = 1250.
+            thick = 25.4
+            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
+            self.PMTradius = 25.4
+            self.dEdx = 0.2 # MeV/mm
+            self.ScintYield = 100 # photons/MeV
+        if option.lower()=='dayabay':
+            # for WbLS-loaded dayabay
+            self.detectorName = 'DayaBay'
+            self.pawDir = '/Users/djaffe/work/paw/DAYABAY/'
+            # construct detector
+            # coordinate system has z=0 at top, positive z pointing up
+            ID = 3000. 
+            IH = 3000. 
+            thick = 10.
+            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
+            self.PMTradius = 200./2 # 8" PMT
+            self.dEdx = 0.2 # MeV/mm
+            self.ScintYield = 1000 # photons/MeV
+        if self.detectorName is None:
+            words = 'INVALID INPUT OPTION ' + str(option)
+            sys.exit(words)
+                
 
-
-
-        # construct detector
-        # coordinate system has z=0 at top, positive z pointing up
-        ID = 995.
-        IH = 1250.
-        thick = 25.4
-        self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
-
+        # for defining cosmic ray hodoscope external to vessel
         c = 1.
         self.HodoWidth = c
         self.Hodoscope = [-c/2., c/2, -c/2, c/2] # x1,y1 , x2,y2 = edges of hodoscope
 
-        self.PMTradius = 25.4
 
         self.ior = 1.33  # index of refraction
 
-        self.dEdx = 0.2 # MeV/mm
-        self.ScintYield = 100 # photons/MeV
 
         #self.wlRange = [300., 600. ] # range of wavelengths for cerenkov light relevant for bialkalai pmt (nm)
         self.wlRange = [250., 700. ] # wider range of wavelengths for cerenkov light relevant for bialkalai pmt (nm)
@@ -430,29 +448,45 @@ class oneton():
                 E1,E2 = KEs,0.
             nG = abs(E1-E2) * self.ScintYield
         return nG
-    def placePMTs(self):
+    def placePMTs(self,outFile=None):
         radcyl, ztop, zbottom = self.Detector
         xyzPMT = []
-        ## bottom
-        for i in range(10):
-            x = 2.*float(i)*self.PMTradius
-            if x+self.PMTradius<=radcyl:
-                xyzPMT.append( [x, 0., zbottom, self.PMTradius, False] ) # x,y,z,r, side or top/bottom pmt
-                if abs(x)>self.PMTradius:
-                    xyzPMT.append( [-x, 0., zbottom, self.PMTradius, False] ) # x,y,z,r, side or top/bottom pmt
-                    
-        ## side
-        for i in range(30):
-            z = zbottom + (2.*float(i)+1)*self.PMTradius
-            if z+self.PMTradius<=ztop:
-                xyzPMT.append( [radcyl, 0., z, self.PMTradius, True] )
-                xyzPMT.append( [-radcyl, 0., z, self.PMTradius, True] )
-        ## top
-        for i in range(10):
-            x = radcyl - (2.*float(i)+1)*self.PMTradius            
-            if x-self.PMTradius>0:
-                xyzPMT.append( [x, 0., ztop, self.PMTradius, False] )
-                xyzPMT.append( [-x, 0., ztop, self.PMTradius, False] )
+        if self.detectorName.lower()=='oneton':
+            ## bottom
+            for i in range(10):
+                x = 2.*float(i)*self.PMTradius
+                if x+self.PMTradius<=radcyl:
+                    xyzPMT.append( [x, 0., zbottom, self.PMTradius, False] ) # x,y,z,r, side or top/bottom pmt
+                    if abs(x)>self.PMTradius:
+                        xyzPMT.append( [-x, 0., zbottom, self.PMTradius, False] ) # x,y,z,r, side or top/bottom pmt
+
+            ## side
+            for i in range(30):
+                z = zbottom + (2.*float(i)+1)*self.PMTradius
+                if z+self.PMTradius<=ztop:
+                    xyzPMT.append( [radcyl, 0., z, self.PMTradius, True] )
+                    xyzPMT.append( [-radcyl, 0., z, self.PMTradius, True] )
+            ## top
+            for i in range(10):
+                x = radcyl - (2.*float(i)+1)*self.PMTradius            
+                if x-self.PMTradius>0:
+                    xyzPMT.append( [x, 0., ztop, self.PMTradius, False] )
+                    xyzPMT.append( [-x, 0., ztop, self.PMTradius, False] )
+        if self.detectorName.lower()=='dayabay':
+            position = 'Side'
+            nrow = 8
+            ncol = 24
+            sep = (ztop-zbottom)/float(nrow)
+            dphi = self.twopi/float(ncol)
+            h = zbottom+sep/2.
+            for irow in range(nrow):
+                for iphi in range(ncol):
+                    phi = float(iphi)*dphi
+                    x = math.cos(phi)*radcyl
+                    y = math.sin(phi)*radcyl
+                    #print 'irow',irow,'phi',phi,'x',x,'y',y
+                    xyzPMT.append( [x,y,h, self.PMTradius, True] )
+                h += sep
         # make a table
         ncol = 4
         line = ''
@@ -468,6 +502,16 @@ class oneton():
                 print line
                 line = ''
         if len(line)>0: print line
+        # write to ntuple?
+        if outFile is not None:
+            iopt = -3
+            for ipmt,e in enumerate(xyzPMT):
+                X1 = e[:3] # position
+                X2 = [e[3], 0., 0.] # radius
+                option = 'Vert'
+                if e[4] : option = 'Side'
+                photon = [ [X1,X2], option, iopt ]
+                self.makeNtuple(outFile, photon, ipmt, -1., -1., -1., -1)
         return xyzPMT
     def hitPMT(self,photonT,xyzPMT):
         '''
@@ -497,11 +541,12 @@ class oneton():
             for hit,pmt in zip(hits,xyzPMT):
                 if hit>0: print 'hit pmt',pmt
         return hits
-    def makeNtuple(self,fopen, photon, ipmt, wl, qe, att):
+    def makeNtuple(self,fopen, photon, ipmt, wl, qe, att, iEvt):
         '''
         for each photon   start     end       0/1   
         ntuple variables: x1,y1,z1, x2,y2,z2, iopt, ipmt, wl, qe, attenuation factor
-        iopt = 0 = Cerenkov, 1 = Scintillation, -2 = drawDet
+        iopt = 0 = Cerenkov, 1 = Scintillation, -2 = drawDet, -3 = PMT positions
+        for iopt = 3: x1,y1,z1 = PMT center, x2 = PMT radius
         '''
         track, option, iopt = photon
         X1, X2 = track
@@ -512,9 +557,113 @@ class oneton():
         s += str(ipmt) + ' ' 
         s += str(wl)   + ' '
         s += str(qe)   + ' '
-        s += str(att) 
+        s += str(att)  + ' '
+        s += str(iEvt)
         s += ' \n'
         fopen.write(s)
+        return
+    def readNtuple(self,inFile=None):
+        '''
+        read ntuple
+        
+        '''
+        if inFile is None:
+            sys.exit('oneton.readNtuple ERROR No input file')
+        f = open(inFile,'r')
+        PMTxyz = {}
+        evtNum = None
+        Event = []
+        for line in f:
+            w = line.split()
+            iopt = int(w[6])
+            if iopt==-3: # PMT positions
+                x,y,z,r =  float(w[0]),float(w[1]),float(w[2]),float(w[3])
+                ipmt = int(w[7])
+                if ipmt in PMTxyz:
+                    words = 'oneton.readNtuple: ERROR found duplicate PMT number ' + str(ipmt)
+                    sys.exit(words)
+                PMTxyz[ipmt]  = [x,y,z, r] 
+            elif iopt==-2: # ignore, for detector drawing
+                continue
+            else: # should be data. iopt=0=cerenkov photons, iopt=1=scint photons
+                ievt = int(w[-1])
+                if ievt<0:
+                    words = 'oneton.readNtuple: ERROR negative event in line: ' + line
+                    sys.exit(words)
+                # new event?
+                if ievt!=evtNum: 
+                    if evtNum is not None:
+                        # analyze previous event
+                        self.anaNtupleEvent(PMTxyz, Event)
+                    Event = [ievt]
+                    evtNum = ievt
+                # add one photon to event
+                xg1,yg1,zg1,xg2,yg2,zg2 = float(w[0]),float(w[1]),float(w[2]),float(w[3]),float(w[4]),float(w[5])
+                ipmt = int(w[7])
+                wl,qe,att = float(w[8]),float(w[9]),float(w[10])
+                if qe<0. or att<0.:
+                    words = 'oneton.readNtuple: ERROR negative QE or attenuation in line: ' + line
+                    sys.exit(words)
+                Event.append( [ [xg1,yg1,zg1], [xg2,yg2,zg2], iopt, ipmt, wl, qe, att] )
+        f.close()
+        # analyze final event
+        if len(Event)>0: self.anaNtupleEvent(PMTxyz, Event)
+        return
+    def anaNtupleEvent(self, PMTxyz, Event):
+        '''
+        analyze one event in ntuple
+        given pmt positions in dict PMTxyz[ipmt] = [x,y,z,radius]
+        and photons in list, one element = [ X1,X2, gtype, PMT#, wavelength, QE, attenuation ]
+        gtype = 0 = cerenkov
+        gtype = 1 = scint
+        '''
+        COGnum = {0:[0.,0.,0.], 1:[0.,0.,0.]}
+        COGden = {0:0., 1:0.}
+        nGamma = {0:0., 1:0.}
+
+        # am I an idiot?
+        checkMe = False
+        if checkMe:
+            gtype = 0
+            wt = 1.
+            for ipmt in PMTxyz:
+                PMTpos = PMTxyz[ipmt][:3]
+                COGden[gtype] += wt
+                for i in range(len(COGnum[gtype])): COGnum[gtype][i] += PMTpos[i]*wt
+            wt = COGden[gtype]
+            for i,e in enumerate(COGnum[gtype]):
+                COGnum[gtype][i] = e/wt
+            print 'oneton.anaNtupleEvent: checkMe gtype',gtype,'COG',COGnum[gtype],'wt',wt
+            COGnum[gtype] = [0.,0.,0.]
+            COGden[gtype] = 0.
+            
+        evtNum = None
+        Xfirst= None
+        for photon in Event:
+            if type(photon) is int:
+                evtNum = photon
+            else:
+                X1, X2, gtype, ipmt, wl, qe, att = photon
+                if Xfirst is None: Xfirst = X1
+                Xlast = X1
+
+                if ipmt>-1:
+                    nGamma[gtype] += 1
+                    PMTpos = PMTxyz[ipmt][:3]
+                    wt = qe*att
+                    COGden[gtype] += wt
+                    for i in range(len(COGnum[gtype])):
+                        COGnum[gtype][i] += PMTpos[i]*wt
+        print 'oneton.anaNtupleEvent: Event #',evtNum
+        for gtype in COGnum:
+            wt = COGden[gtype]
+            for i,e in enumerate(COGnum[gtype]): COGnum[gtype][i] = e/wt
+            print 'oneton.anaNtupleEvent: gtype',gtype,'COG',COGnum[gtype],'nGamma',nGamma[gtype]
+        recDir = [COGnum[1],COGnum[0]]
+        truDir = [Xfirst,Xlast]
+        cosAngle = self.traj.trackAngle(recDir, truDir)
+        print 'oneton.anaNtupleEvent: first,last point on track',Xfirst,Xlast,'cos(recDir,truDir)',cosAngle
+        
         return
     def drawDet(self,fopen):
         '''
@@ -540,7 +689,7 @@ class oneton():
                 X1 = [x,y,z]
                 track = [X1,X2]
                 photon = [track, option, iopt]
-                self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
+                self.makeNtuple(fopen,photon,ipmt,wl,qe,att,-1)
         ## top and bottom
         for z in [ztop, zbottom]:
             for irad in range(3):
@@ -552,7 +701,7 @@ class oneton():
                     X1 = [x,y,z]
                     track = [X1,X2]
                     photon = [track, option, iopt]
-                    self.makeNtuple(fopen,photon,ipmt,wl,qe,att)
+                    self.makeNtuple(fopen,photon,ipmt,wl,qe,att,-1)
                 
         return
     def ranPosDir(self):
@@ -578,12 +727,12 @@ class oneton():
         
         '''
         
-        xyzPMT = self.placePMTs()
-        unique = '_{0}'.format(datetime.datetime.now().strftime("%Y%m%d%H%M"))
+        unique = '_{0}'.format(datetime.datetime.now().strftime("%Y%m%d%H%M_%f"))
         filename = self.pawDir  + prefn + unique + '.nt'
         fopen = open(filename,'w')
         print 'oneton.standardRun: Opened',filename
         self.drawDet(fopen)
+        xyzPMT = self.placePMTs(outFile=fopen)
         for iEvt in range(nE):
             print 'Event#',iEvt,'Save',Save,'mode',mode
             if mode.lower()=='simple':
@@ -611,7 +760,7 @@ class oneton():
                 # random position and direction
                 elif ioption==3:
                     particle = 'e-'
-                    KE = 150.
+                    KE = 5.
                     tStart, tDir = self.ranPosDir()
                     msg += ' e- random pos,dir'
                 # cosmic
@@ -672,6 +821,14 @@ class oneton():
                     tStart = [0.,25.,self.Detector[2]+100.]
                     tDir = self.downward
                     msg = isotope + ' near bottom, pointed down'
+                # fake elastic scatter electrons
+                elif ioption in [18,19,20,21,22]:
+                    particle = 'e-'
+                    KE = 4.
+                    r = 0.45*self.Detector[0]*float(ioption-20)/math.sqrt(2)
+                    tStart = [r,r,-555.]
+                    tDir = [-1., -1., -0.1]
+                    msg = 'towards -ve x,y'
                 
                 processes = []
                 if nC>0: processes.append('Cerenkov')
@@ -698,28 +855,32 @@ class oneton():
                     qe = self.Photons.getQE(wl)
                     length = self.traj.mag( self.traj.makeVec( photon[0] ) )
                     att = self.Photons.getAtten( wl, length, medium='water')
-                    self.makeNtuple(fopen, photon, ipmt, wl, qe, att)
+                    self.makeNtuple(fopen, photon, ipmt, wl, qe, att, iEvt)
         fopen.close()
         print 'exec oneton#valid',filename,' ! ','\'',msg,'\''
+        # do some analysis
+        self.readNtuple(filename)
         return
 if __name__ == '__main__' :
     if len(sys.argv)>1:
         if 'help' in sys.argv[1].lower():
-            print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption'
+            print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption oneton/dayabay'
             sys.exit()
 
-    ton = oneton()
-    print ''
     nC = 1
     nS = 1
     nE = 1
     ioption = 1
     Save = 'All'
     mode = 'Better'
+    det = 'oneton'
     if len(sys.argv)>1: nC = int(sys.argv[1])
     if len(sys.argv)>2: nS = int(sys.argv[2])
     if len(sys.argv)>3: nE = int(sys.argv[3])
     if len(sys.argv)>4: Save = sys.argv[4]
     if len(sys.argv)>5: ioption = int(sys.argv[5])
+    if len(sys.argv)>6: det = sys.argv[6]
+    ton = oneton(option=det)
+    print ''
     ton.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
 
