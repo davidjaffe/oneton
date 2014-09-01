@@ -34,6 +34,7 @@ class oneton():
         self.PMTradius = None
         self.dEdx = None
         self.ScintYield = None
+        self.generationLog = None
                 
 
         # for defining cosmic ray hodoscope external to vessel
@@ -99,6 +100,10 @@ class oneton():
         if self.detectorName is None:
             words = 'oneton.defineDetector detName ' + str(detName)
             sys.exit(words)
+            
+        # file to contain relation of output ntuple 
+        self.generationLog = self.pawDir + 'AAAGeneration.log'
+
         return
     def betaSpectrum(self,T,Tmax):
         '''
@@ -338,8 +343,9 @@ class oneton():
                 eKey += 1
                 self.savedEventKeys[eKey] = inputPar
             else:
-                tDir, track, totR, finalKE, samples = self.savedEvents[eKey]
-                if self.debug>2: print 'oneton.oneEvent: retrieved track',track
+                # deepcopy in next line is necessary to prevent track (and other dict contents) from alternation
+                tDir, track, totR, finalKE, samples = copy.deepcopy( self.savedEvents[eKey] )
+                if self.debug>1: print 'oneton.oneEvent: eKey',eKey,'retrieved track',track
 
         if not found:
             ### make sure direction vector is unit vector
@@ -351,8 +357,9 @@ class oneton():
 
             ### determine total range along initial trajectory (no scattering)
             totR, finalKE, samples = self.Range.propagate(particle, material, KE, thickness, maxdEperSample=0.1)
-            self.savedEvents[eKey] = tDir, copy.deepcopy( track ), totR, finalKE, samples
-            if self.debug>2: print 'oneton.oneEvent: saving track',track
+            originalTrack = copy.deepcopy( track )
+            self.savedEvents[eKey] = tDir, originalTrack, totR, finalKE, samples
+            if self.debug>1: print 'oneton.oneEvent: eKey',eKey,'saving track',track
             if self.debug>0: 
                 print '\n totR',totR,'finalKE',finalKE,'thickness',thickness
                 if self.debug>1: self.Range.printSampleTable( samples )
@@ -364,7 +371,9 @@ class oneton():
         track = [ X1, X2]
         if self.debug>2: print 'oneton.oneEvent track',track
 
-        print 'oneton.oneEvent totR',totR,'finalKE',finalKE,'nSamples',len(samples)
+        if self.debug>0: 
+            print 'oneton.oneEvent totR',totR,'finalKE',finalKE,'nSamples',len(samples)
+            print 'oneton.oneEvent tStart',tStart,'tDir',tDir,'track',track
 
         ### generate cerenkov and scintillation photons on track using samples
         ### Cerenkov: for each sample generate the energy and cos(theta) of each photon
@@ -615,7 +624,7 @@ class oneton():
         s = " ".join(str(a) for a in L)
         fopen.write(s)
         return
-    def readNtuple(self,inFile=None):
+    def readNtuple(self,inFile=None,writeAnaNtuple=True):
         '''
         read ntuple
         
@@ -623,6 +632,12 @@ class oneton():
         if inFile is None:
             sys.exit('oneton.readNtuple ERROR No input file')
         f = open(inFile,'r')
+        fana = None
+        if writeAnaNtuple:
+            unique = '_{0}'.format(datetime.datetime.now().strftime("%Y%m%d%H%M_%f"))
+            anaName = inFile.replace('.nt',unique + '.ana')
+            fana = open(anaName,'w')
+            print 'opened',anaName
         PMTxyz = {}
         evtNum = None
         Event = []
@@ -647,7 +662,7 @@ class oneton():
                 if ievt!=evtNum: 
                     if evtNum is not None:
                         # analyze previous event
-                        self.anaNtupleEvent(PMTxyz, Event)
+                        self.anaNtupleEvent(PMTxyz, Event, anaFile=fana)
                     Event = [ievt]
                     evtNum = ievt
                 # add one photon to event
@@ -660,9 +675,11 @@ class oneton():
                 Event.append( [ [xg1,yg1,zg1], [xg2,yg2,zg2], iopt, ipmt, wl, qe, att] )
         f.close()
         # analyze final event
-        if len(Event)>0: self.anaNtupleEvent(PMTxyz, Event)
+        if len(Event)>0:
+            self.anaNtupleEvent(PMTxyz, Event, anaFile=fana)
+            if fana is not None: fana.close()
         return
-    def anaNtupleEvent(self, PMTxyz, Event):
+    def anaNtupleEvent(self, PMTxyz, Event, anaFile=None):
         '''
         analyze one event in ntuple
         given pmt positions in dict PMTxyz[ipmt] = [x,y,z,radius]
@@ -673,6 +690,8 @@ class oneton():
         COGnum = {0:[0.,0.,0.], 1:[0.,0.,0.]}
         COGden = {0:0., 1:0.}
         nGamma = {0:0., 1:0.}
+
+        report = False
 
         # am I an idiot?
         checkMe = False
@@ -707,17 +726,31 @@ class oneton():
                     COGden[gtype] += wt
                     for i in range(len(COGnum[gtype])):
                         COGnum[gtype][i] += PMTpos[i]*wt
-        print 'oneton.anaNtupleEvent: Event #',evtNum
+        if report: print 'oneton.anaNtupleEvent: Event #',evtNum
         for gtype in COGnum:
             wt = COGden[gtype]
             if wt>0:
                 for i,e in enumerate(COGnum[gtype]): COGnum[gtype][i] = e/wt
-            print 'oneton.anaNtupleEvent: gtype',gtype,'COG',COGnum[gtype],'nGamma',nGamma[gtype]
+            if report: print 'oneton.anaNtupleEvent: gtype',gtype,'COG',COGnum[gtype],'nGamma',nGamma[gtype],'wtGamma',wt
         recDir = [COGnum[1],COGnum[0]]
         truDir = [Xfirst,Xlast]
         cosAngle = self.traj.trackAngle(recDir, truDir)
-        print 'oneton.anaNtupleEvent: first,last point on track',Xfirst,Xlast,'cos(recDir,truDir)',cosAngle
-        
+        if report: print 'oneton.anaNtupleEvent: first,last point on track',Xfirst,Xlast,'cos(recDir,truDir)',cosAngle
+        if anaFile is not None:
+            anaList = []
+            for gtype in COGnum:
+                anaList.extend(COGnum[gtype])
+            for X in truDir:
+                anaList.extend(X)
+            for gtype in COGnum:
+                anaList.append(COGden[gtype])
+            for gtype in nGamma:
+                anaList.append(nGamma[gtype])
+            anaList.append(cosAngle)
+            anaList.append(evtNum)
+            anaList.append(' \n')
+            s = " ".join(str(a) for a in anaList)
+            anaFile.write(s)
         return
     def drawDet(self,fopen):
         '''
@@ -760,10 +793,10 @@ class oneton():
         return
     def ranPosDir(self):
         '''
-        return random position vector and direction unit vector
+        return random position vector and direction unit vector.
         '''
         ranphi = random.uniform(0.,self.twopi)
-        ranrad = random.uniform(0.,self.Detector[0])
+        ranrad = math.sqrt( random.uniform(0.,self.Detector[0]*self.Detector[0]) )
         ranz   = random.uniform(self.Detector[2],0.)
         tStart = [ranrad*math.cos(ranphi),ranrad*math.sin(ranphi),ranz]
         tDir = [random.uniform(-1,1),random.uniform(-1,1),random.uniform(-1,1)]
@@ -788,7 +821,9 @@ class oneton():
         self.drawDet(fopen)
         xyzPMT,ZofPMT = self.placePMTs(outFile=fopen)
         for iEvt in range(nE):
-            print 'Event#',iEvt,'Save',Save,'mode',mode
+            printStuff = ( iEvt<10 or iEvt%(nE/10)==0 )
+            if printStuff: print 'Event#',iEvt,'Save',Save,'mode',mode,'ioption',ioption,
+            
             if mode.lower()=='simple':
                 photons = self.oneSimpleEvent(nCerenkov=nC, nScint=nS)
             elif mode.lower()=='better':
@@ -891,7 +926,9 @@ class oneton():
                 msg += ' '+particle+' in '+material+' KE '
                 msg += '{0:.3f}'.format(KE)
                 msg += ' Pos'+self.niceString(tStart)+' & Dir '+self.niceString(tDir)+' '+self.niceString(processes)
-                print msg
+                if printStuff:
+                    print msg
+                    sys.stdout.flush()
                 energys,photons = self.oneEvent(particle, material, KE, tStart, tDir=tDir,processes=processes)
                 
             for j,photon in enumerate(photons):
@@ -910,6 +947,11 @@ class oneton():
                     self.makeNtuple(fopen, photon, ipmt, wl, qe, att, iEvt)
         fopen.close()
         print 'exec oneton#valid',filename,' ! ','\'',msg,'\''
+        
+        # write a line to generation log
+        with open(self.generationLog,'a') as gFile:
+            gFile.write(filename + ' ioption='+str(ioption)+ ' ' + msg)
+            
         # do some analysis
         self.readNtuple(filename)
         return

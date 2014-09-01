@@ -125,7 +125,8 @@ class Range():
             print 'range.getTable for particle',particle,'& material',matAlias,'with key',key,'from filename',fn
             if len(ignoredLines)>0: print ignoredLines
         else:
-            print 'range.getTable key',key,'exists for particle',particle,'& material',matAlias
+            pass
+            #print 'range.getTable key',key,'exists for particle',particle,'& material',matAlias
         return key
     def setStepSize(self,KE):
         '''
