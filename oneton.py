@@ -17,7 +17,7 @@ import copy
 import ParticleProperties
 
 class oneton():
-    def __init__(self,option='oneton'):
+    def __init__(self):
 
         self.debug = 0
 
@@ -27,36 +27,13 @@ class oneton():
         self.cerenkov = cerenkov.cerenkov()
         self.ParticleProperties = ParticleProperties.ParticleProperties()
 
-        # output directory for ntuple
+        # defaults for definition of detector
         self.detectorName = None
-        if option.lower()=='oneton':
-            self.detectorName = 'OneTon'
-            self.pawDir = '/Users/djaffe/work/paw/ONETON/'
-            # construct detector
-            # coordinate system has z=0 at top, positive z pointing up
-            ID = 995.
-            IH = 1250.
-            thick = 25.4
-            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
-            self.PMTradius = 25.4
-            self.dEdx = 0.2 # MeV/mm
-            self.ScintYield = 100 # photons/MeV
-        if option.lower()=='dayabay':
-            # for WbLS-loaded dayabay
-            self.detectorName = 'DayaBay'
-            self.pawDir = '/Users/djaffe/work/paw/DAYABAY/'
-            # construct detector
-            # coordinate system has z=0 at top, positive z pointing up
-            ID = 3000. 
-            IH = 3000. 
-            thick = 10.
-            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
-            self.PMTradius = 200./2 # 8" PMT
-            self.dEdx = 0.2 # MeV/mm
-            self.ScintYield = 1000 # photons/MeV
-        if self.detectorName is None:
-            words = 'INVALID INPUT OPTION ' + str(option)
-            sys.exit(words)
+        self.pawDir = None
+        self.Detector = None
+        self.PMTradius = None
+        self.dEdx = None
+        self.ScintYield = None
                 
 
         # for defining cosmic ray hodoscope external to vessel
@@ -85,6 +62,43 @@ class oneton():
 
         self.savedEvents = {}
         self.savedEventKeys = {}
+
+
+        return
+    def defineDetector(self,detName='oneton'):
+        '''
+        module to define detector parameters
+        sets a bunch of internal parameters
+        '''
+        
+        if detName.lower()=='oneton':
+            self.detectorName = 'OneTon'
+            self.pawDir = '/Users/djaffe/work/paw/ONETON/'
+            # construct detector
+            # coordinate system has z=0 at top, positive z pointing up
+            ID = 995.
+            IH = 1250.
+            thick = 25.4
+            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
+            self.PMTradius = 25.4
+            self.dEdx = 0.2 # MeV/mm
+            self.ScintYield = 100 # photons/MeV
+        if detName.lower()=='dayabay':
+            # for WbLS-loaded dayabay
+            self.detectorName = 'DayaBay'
+            self.pawDir = '/Users/djaffe/work/paw/DAYABAY/'
+            # construct detector
+            # coordinate system has z=0 at top, positive z pointing up
+            ID = 3000. 
+            IH = 3000. 
+            thick = 10.
+            self.Detector = [ID/2., 0., -IH] # [radius,ztop, zbottom]
+            self.PMTradius = 200./2 # 8" PMT
+            self.dEdx = 0.2 # MeV/mm
+            self.ScintYield = 1000 # photons/MeV
+        if self.detectorName is None:
+            words = 'oneton.defineDetector detName ' + str(detName)
+            sys.exit(words)
         return
     def betaSpectrum(self,T,Tmax):
         '''
@@ -487,6 +501,13 @@ class oneton():
                     #print 'irow',irow,'phi',phi,'x',x,'y',y
                     xyzPMT.append( [x,y,h, self.PMTradius, True] )
                 h += sep
+                
+        # produce a list of indices sorted by z position
+        ZofPMT = [] # z,index (will be sorted)
+        for i,pmt in enumerate(xyzPMT):
+            ZofPMT.append( [ pmt[2],i ] )
+        ZofPMT.sort()
+        
         # make a table
         ncol = 4
         line = ''
@@ -512,54 +533,86 @@ class oneton():
                 if e[4] : option = 'Side'
                 photon = [ [X1,X2], option, iopt ]
                 self.makeNtuple(outFile, photon, ipmt, -1., -1., -1., -1)
-        return xyzPMT
-    def hitPMT(self,photonT,xyzPMT):
+        # check for mistakes, do PMTs overlap?
+        self.checkPMToverlap(xyzPMT)
+        return xyzPMT,ZofPMT
+    def checkPMToverlap(self,xyzPMT):
+        '''
+        check if PMTs overlap. Error and exit, if so.
+        xyzPMT = [ [x,y,z,r,T/F=side/top-bottom]
+
+        Note tiny adjustment made to square of sum of radii to take into account
+        numerical precision when PMTs are placed so that they are touching.
+        '''
+        for i,pmt1 in enumerate(xyzPMT):
+            x1,y1,z1,r1,side1 = pmt1
+            for j,pmt2 in enumerate(xyzPMT):
+                if j>i:
+                    x2,y2,z2,r2,side2 = pmt2
+                    if side1==side2:
+                        if (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)+(z1-z2)*(z1-z2) < (r1+r2)*(r1+r2)-1.e-10:
+                            words = 'oneton.checkPMToverlap: ERROR pmt# ' + str(i) + ' overlaps pmt# '+ str(j) +' \n'
+                            words+= 'x1='+str(x1)+' x2='+str(x2)+' x1-x2=' + str(x1-x2) +  ' \n'
+                            words+= 'y1='+str(y1)+' y2='+str(y2)+' y1-y2=' + str(y1-y2) +  ' \n'
+                            words+= 'z1='+str(z1)+' z2='+str(z2)+' z1-z2=' + str(z1-z2) +  ' \n'
+                            words+= 'r1='+str(r1)+' r2='+str(r2)+' r1+r2=' + str(r1+r2) +  ' \n'
+                            words+= 'sum of squares of differences='+str((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)+(z1-z2)*(z1-z2))+ ' square of sums of radii='+str((r1+r2)*(r1+r2))+' difference='+str((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)+(z1-z2)*(z1-z2)-(r1+r2)*(r1+r2))
+                            
+                            print words
+                            sys.exit(words)
+        return
+    def hitPMT(self,photonT,xyzPMT,ZofPMT):
         '''
         determine hit PMT for input photon track photonT = [ [startPoint], [endPoint] ]
         given PMT positions in xyzPMT
-        error message if >1 hit PMT
+        ZofPMT is list of [z,pmt index] sorted by z
+        Check for >1 PMT hit supplanted by checkPMToverlap
         '''
         hits = []
         nhit = 0
 
         X1,X2 = photonT
         x,y,z = X2
-        for pmt in xyzPMT:
-            xPMT, yPMT, zPMT, rPMT, side = pmt
-            hit = 0
+        dist = 1.e20
+        iPMT = -1 #  no PMT hit
+        # first check if hit is below (above) first (last) PMT in z
+        zPMT,jPMT = ZofPMT[0]
+        xPMT,yPMT,zPMT,rPMT,side = xyzPMT[jPMT]
+        if z<zPMT-rPMT: return iPMT
+        zPMT,jPMT = ZofPMT[-1]
+        xPMT,yPMT,zPMT,rPMT,side = xyzPMT[jPMT]
+        if z>zPMT+rPMT: return iPMT
+        # search from lowest to highest z, break when past the z of the hit
+        for pair in ZofPMT:
+            zPMT,jpmt = pair
+            D = (z-zPMT)*(z-zPMT)
+            if D>dist:
+                return iPMT
+            dist = D
+            xPMT, yPMT, zPMT, rPMT, side = xyzPMT[jpmt]
+
             dz = 0.00001
             if side : dz = rPMT
             if abs(z-zPMT)<dz:
-                if math.sqrt( (x-xPMT)*(x-xPMT) + (y-yPMT)*(y-yPMT) + (z-zPMT)*(z-zPMT) )<rPMT:
-                       hit = 1
-            hits.append(hit)
-            nhit += hit
-        if nhit>1:
-            print 'oneton.hitPMT ERROR too many hit PMTs. NPMT',nhit
-            print 'photonT',photonT
-            print 'hits',hits
-            for hit,pmt in zip(hits,xyzPMT):
-                if hit>0: print 'hit pmt',pmt
-        return hits
+                if ( (x-xPMT)*(x-xPMT) + (y-yPMT)*(y-yPMT) + D )<rPMT*rPMT:
+                    return jpmt
+        return iPMT
     def makeNtuple(self,fopen, photon, ipmt, wl, qe, att, iEvt):
         '''
         for each photon   start     end       0/1   
         ntuple variables: x1,y1,z1, x2,y2,z2, iopt, ipmt, wl, qe, attenuation factor
         iopt = 0 = Cerenkov, 1 = Scintillation, -2 = drawDet, -3 = PMT positions
         for iopt = 3: x1,y1,z1 = PMT center, x2 = PMT radius
+        
+        replaced string concatentation with join of list
         '''
         track, option, iopt = photon
         X1, X2 = track
-        s = ''
-        for u in X1: s += str(u) + ' '
-        for u in X2: s += str(u) + ' '
-        s += str(iopt) + ' ' 
-        s += str(ipmt) + ' ' 
-        s += str(wl)   + ' '
-        s += str(qe)   + ' '
-        s += str(att)  + ' '
-        s += str(iEvt)
-        s += ' \n'
+        L = []
+        L.extend(X1)
+        L.extend(X2)
+        for u in [iopt, ipmt, wl, qe, att, iEvt, "\n"]: L.append(u)
+        s = " ".join(str(a) for a in L)
         fopen.write(s)
         return
     def readNtuple(self,inFile=None):
@@ -657,7 +710,8 @@ class oneton():
         print 'oneton.anaNtupleEvent: Event #',evtNum
         for gtype in COGnum:
             wt = COGden[gtype]
-            for i,e in enumerate(COGnum[gtype]): COGnum[gtype][i] = e/wt
+            if wt>0:
+                for i,e in enumerate(COGnum[gtype]): COGnum[gtype][i] = e/wt
             print 'oneton.anaNtupleEvent: gtype',gtype,'COG',COGnum[gtype],'nGamma',nGamma[gtype]
         recDir = [COGnum[1],COGnum[0]]
         truDir = [Xfirst,Xlast]
@@ -732,7 +786,7 @@ class oneton():
         fopen = open(filename,'w')
         print 'oneton.standardRun: Opened',filename
         self.drawDet(fopen)
-        xyzPMT = self.placePMTs(outFile=fopen)
+        xyzPMT,ZofPMT = self.placePMTs(outFile=fopen)
         for iEvt in range(nE):
             print 'Event#',iEvt,'Save',Save,'mode',mode
             if mode.lower()=='simple':
@@ -843,10 +897,8 @@ class oneton():
             for j,photon in enumerate(photons):
                 option = photon[1]
                 
-                hits = self.hitPMT( photon[0], xyzPMT)
-                ipmt = -1
-                if 1 in hits :
-                    ipmt = hits.index(1)
+                ipmt = self.hitPMT( photon[0], xyzPMT, ZofPMT)
+
                 if Save=='All' or ipmt>-1 :
                     if mode.lower()=='simple':
                         wl = self.Photons.getWavelength( beta=1., medium='water', process=photon[1])
@@ -861,26 +913,27 @@ class oneton():
         # do some analysis
         self.readNtuple(filename)
         return
+    def control(self,nC=1,nS=1,nE=1,ioption=1,Save='All',mode='better',det='oneton'):
+        '''
+        consolidate control into a module
+        '''
+        if len(sys.argv)>1: nC = int(sys.argv[1])
+        if len(sys.argv)>2: nS = int(sys.argv[2])
+        if len(sys.argv)>3: nE = int(sys.argv[3])
+        if len(sys.argv)>4: Save = sys.argv[4]
+        if len(sys.argv)>5: ioption = int(sys.argv[5])
+        if len(sys.argv)>6: det = sys.argv[6]
+        self.defineDetector(detName=det)
+        self.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
+        return
 if __name__ == '__main__' :
     if len(sys.argv)>1:
         if 'help' in sys.argv[1].lower():
             print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption oneton/dayabay'
             sys.exit()
 
-    nC = 1
-    nS = 1
-    nE = 1
-    ioption = 1
-    Save = 'All'
-    mode = 'Better'
-    det = 'oneton'
-    if len(sys.argv)>1: nC = int(sys.argv[1])
-    if len(sys.argv)>2: nS = int(sys.argv[2])
-    if len(sys.argv)>3: nE = int(sys.argv[3])
-    if len(sys.argv)>4: Save = sys.argv[4]
-    if len(sys.argv)>5: ioption = int(sys.argv[5])
-    if len(sys.argv)>6: det = sys.argv[6]
-    ton = oneton(option=det)
+    ton = oneton()
+    ton.control()
     print ''
-    ton.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
+    #ton.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
 

@@ -147,8 +147,20 @@ class ProcessMaterialProperty():
             a.sort()
             self.Property[key] = result
             self.sortedPropertyKeys[key] = a
+
+        # original method used next line that traverses entire list
+        #j = min(range(len(a)), key=lambda i: abs(a[i]-wl))
+        # faster method that assumes monotonically increasing values
+        j = None
+        dist = 1.e20
+        for i in range(len(a)):
+            Q = abs(a[i]-wl)
+            if Q>dist:
+                break
+            if Q<dist:
+                j = i
+                dist = Q
             
-        j = min(range(len(a)), key=lambda i: abs(a[i]-wl))
         if wl<a[j]:
             k = max(0,j-1)
         else:
