@@ -24,6 +24,7 @@ class Range():
                             }
         # map of material name to aliases, valid particle types and density (g/cm3)
         self.Materials = {'water' : [ ['liquidwater', 'water'] , ['electron','positron'], 1.00 ],\
+                          'polyethylene' : [ ['polyethylene'], ['electron','positron'], 0.98 ], \
                           'toluene': [ ['toluene'], ['electron', 'positron'], 8.66900E-01 ] }
         
         self.tiny = 1.e-16
@@ -232,7 +233,22 @@ if __name__ == '__main__' :
             totR, finalKE, samples = r.propagate('electron','water',ke,t)
             print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
             r.printSampleTable(samples)
-    mutest = 1
+    ptest = 1
+    if ptest:
+        KEs = [201., 201., 201., 201.]
+        thick = [1.0, 1.5, 2.0, 2.5]
+        poly = 22.
+        for ke,t in zip(KEs,thick):
+            totR, finalKE, samples = r.propagate('proton','water',ke,t)
+            print '\n inital KE(MeV)',ke,'water thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',ke-finalKE
+            newKE = finalKE
+            totR, finalKE, samples = r.propagate('proton','polyethylene',newKE,poly)
+            print ' inital KE(MeV)',newKE,'poly thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
+            newKE = finalKE
+            totR, finalKE, samples = r.propagate('proton','water',newKE,t)
+            print ' inital KE(MeV)',newKE,'poly thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
+            
+    mutest = 0
     if mutest:
         KEs = [2000.]
         thick = [1.]
