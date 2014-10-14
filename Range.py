@@ -24,7 +24,7 @@ class Range():
                             }
         # map of material name to aliases, valid particle types and density (g/cm3)
         self.Materials = {'water' : [ ['liquidwater', 'water'] , ['electron','positron'], 1.00 ],\
-                          'polyethylene' : [ ['polyethylene'], ['electron','positron'], 0.98 ], \
+                          'polyethylene' : [ ['polyethylene'], ['electron','positron'], 0.97 ], \
                           'toluene': [ ['toluene'], ['electron', 'positron'], 8.66900E-01 ] }
         
         self.tiny = 1.e-16
@@ -235,18 +235,23 @@ if __name__ == '__main__' :
             r.printSampleTable(samples)
     ptest = 1
     if ptest:
-        KEs = [201., 201., 201., 201.]
-        thick = [1.0, 1.5, 2.0, 2.5]
-        poly = 22.
-        for ke,t in zip(KEs,thick):
-            totR, finalKE, samples = r.propagate('proton','water',ke,t)
-            print '\n inital KE(MeV)',ke,'water thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',ke-finalKE
-            newKE = finalKE
-            totR, finalKE, samples = r.propagate('proton','polyethylene',newKE,poly)
-            print ' inital KE(MeV)',newKE,'poly thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
-            newKE = finalKE
-            totR, finalKE, samples = r.propagate('proton','water',newKE,t)
-            print ' inital KE(MeV)',newKE,'poly thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
+        KEs = [198., 201., 204., 207., 210., 213., 216., 219.]
+        thick = [4.0] #[1.0, 1.5, 2.0, 2.5]
+        poly = 20.831
+        for mat in ['water', 'polyethylene' ]:
+            for ke in KEs:
+                print '\n INITIAL BEAM ENERGY',ke,'MeV -----------------'
+                for t in thick:
+                    totR, finalKE, samples = r.propagate('proton',mat,ke,t)
+                    Eloss1 = ke-finalKE
+                    print ' inital KE(MeV)',ke,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss1
+                    newKE = finalKE
+                    totR, finalKE, samples = r.propagate('proton','polyethylene',newKE,poly)
+                    print ' inital KE(MeV)',newKE,'poly thickness(cm)',poly,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
+                    newKE = finalKE
+                    totR, finalKE, samples = r.propagate('proton',mat,newKE,t)
+                    Eloss2 = newKE-finalKE
+                    print ' inital KE(MeV)',newKE,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss2,'ratio(up/down)=',Eloss2/Eloss1
             
     mutest = 0
     if mutest:
