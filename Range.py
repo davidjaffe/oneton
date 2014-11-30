@@ -235,23 +235,28 @@ if __name__ == '__main__' :
             r.printSampleTable(samples)
     ptest = 1
     if ptest:
-        KEs = [198., 201., 204., 207., 210., 213., 216., 219.]
+        level = 1
+        KEs = [198., 199., 200., 201., 204., 207., 210., 213., 216., 219.]
         thick = [4.0] #[1.0, 1.5, 2.0, 2.5]
         poly = 20.831
         for mat in ['water', 'polyethylene' ]:
+            if level>0: print '\n---- holder is',thick[0],'cm',mat,' ----'
             for ke in KEs:
-                print '\n INITIAL BEAM ENERGY',ke,'MeV -----------------'
+                if level>1: print '\n INITIAL BEAM ENERGY',ke,'MeV -----------------'
+                initialKE = ke
                 for t in thick:
                     totR, finalKE, samples = r.propagate('proton',mat,ke,t)
                     Eloss1 = ke-finalKE
-                    print ' inital KE(MeV)',ke,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss1
+                    if level>1: print ' inital KE(MeV)',ke,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss1
                     newKE = finalKE
                     totR, finalKE, samples = r.propagate('proton','polyethylene',newKE,poly)
-                    print ' inital KE(MeV)',newKE,'poly thickness(cm)',poly,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
+                    if level>1:print ' inital KE(MeV)',newKE,'poly thickness(cm)',poly,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',newKE-finalKE
                     newKE = finalKE
                     totR, finalKE, samples = r.propagate('proton',mat,newKE,t)
                     Eloss2 = newKE-finalKE
-                    print ' inital KE(MeV)',newKE,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss2,'ratio(up/down)=',Eloss2/Eloss1
+                    if level>1: print ' inital KE(MeV)',newKE,mat,'thickness(cm)',t,'total range(cm)',totR,'final KE(mEV)',finalKE,'energy lost(MeV)',Eloss2,'ratio(up/down)=',Eloss2/Eloss1
+
+                    if level>0: print ' Initial KE(MeV) {0:.2f}, final KE {1:.2f} ratio(Rear/Front) {2:.2f}'.format(initialKE,finalKE,Eloss2/Eloss1)
             
     mutest = 0
     if mutest:
