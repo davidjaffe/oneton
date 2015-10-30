@@ -97,6 +97,16 @@ class oneton():
             self.PMTradius = 200./2 # 8" PMT
             self.dEdx = 0.2 # MeV/mm
             self.ScintYield = 1000 # photons/MeV
+        if detName.lower()=='sr90-acrylic':
+            # cerenkov light generator
+            self.detectorName = 'Sr90-acrylic'
+            self.pawDir = '/Users/djaffe/work/paw/SR90ACRYLIC/'
+            ID = 300.
+            IH = 100.
+            self.Detector = [ID/2., 0., -IH]
+            self.PMTradius = 25.4
+            self.dEdx = 0.2
+            self.ScintYield = 0
         if self.detectorName is None:
             words = 'oneton.defineDetector detName ' + str(detName)
             sys.exit(words)
@@ -584,6 +594,7 @@ class oneton():
         x,y,z = X2
         dist = 1.e20
         iPMT = -1 #  no PMT hit
+        if len(ZofPMT)==0: return iPMT # no PMTs
         # first check if hit is below (above) first (last) PMT in z
         zPMT,jPMT = ZofPMT[0]
         xPMT,yPMT,zPMT,rPMT,side = xyzPMT[jPMT]
@@ -894,15 +905,19 @@ class oneton():
                         tDir   = [-.5,-1.,-0.]
                     msg = 'outward at side'
                 # beta spectrum
-                # Tmax of 2.2801 corresponds to 90Y39 decay (90Sr daughter)
+                # Tmax of 2.2801 corresponds to 90Y39 (2-=>0+ gs) decay (90Sr daughter) 99.9885% intensity
                 # Tmax of 3.541  corresponds to 106Rh decay (106Ru daughter)
-                elif ioption in [16,17]:
+                # Tmax of 0.5194 corresponds to 90Y39 (2-=>0+) decay 0.0115% intensity
+                elif ioption in [16,161,17]:
                     particle = 'e-'
                     KE = 0.
                     isotope = 'NONE'
                     if ioption==16: 
                         Tmax = 2.2801
                         isotope = '90Sr'
+                    if ioption==161:
+                        Tmax = 0.5194
+                        isotope = '90Sr_ex'
                     if ioption==17:
                         Tmax = 3.541
                         isotope = '106Ru'
@@ -910,6 +925,10 @@ class oneton():
                     tStart = [0.,25.,self.Detector[2]+100.]
                     tDir = self.downward
                     msg = isotope + ' near bottom, pointed down'
+                    if self.detectorName=='Sr90-acrylic':
+                        material = 'acrylic'
+                        tStart = [0., 0., 0.]
+                        msg = isotope + ' at top, pointed down'
                 # fake elastic scatter electrons
                 elif ioption in [18,19,20,21,22]:
                     particle = 'e-'
@@ -952,8 +971,11 @@ class oneton():
         with open(self.generationLog,'a') as gFile:
             gFile.write(filename + ' ioption='+str(ioption)+ ' ' + msg)
             
-        # do some analysis
-        self.readNtuple(filename)
+        # do some analysis?
+        if self.detectorName=='Sr90-acrylic':
+            print 'oneton.standardRun: no analysis for',self.detectorName
+        else:
+            self.readNtuple(filename)
         return
     def control(self,nC=1,nS=1,nE=1,ioption=1,Save='All',mode='better',det='oneton'):
         '''
@@ -971,7 +993,7 @@ class oneton():
 if __name__ == '__main__' :
     if len(sys.argv)>1:
         if 'help' in sys.argv[1].lower():
-            print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption oneton/dayabay'
+            print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption oneton/dayabay/sr90-acrylic'
             sys.exit()
 
     ton = oneton()

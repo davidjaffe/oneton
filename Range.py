@@ -25,7 +25,8 @@ class Range():
         # map of material name to aliases, valid particle types and density (g/cm3)
         self.Materials = {'water' : [ ['liquidwater', 'water'] , ['electron','positron'], 1.00 ],\
                           'polyethylene' : [ ['polyethylene'], ['electron','positron'], 0.97 ], \
-                          'toluene': [ ['toluene'], ['electron', 'positron'], 8.66900E-01 ] }
+                          'toluene': [ ['toluene'], ['electron', 'positron'], 8.66900E-01 ], \
+                          'acrylic': [ ['acrylic'], ['electron', 'positron'], 1.19] }
         
         self.tiny = 1.e-16
 
@@ -233,7 +234,7 @@ if __name__ == '__main__' :
             totR, finalKE, samples = r.propagate('electron','water',ke,t)
             print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
             r.printSampleTable(samples)
-    ptest = 1
+    ptest = 0
     if ptest:
         level = 1
         KEs = [198., 199., 200., 201., 204., 207., 210., 213., 216., 219.]
@@ -267,4 +268,10 @@ if __name__ == '__main__' :
             print '\n initial KE(MeV)',ke,'thickness(cm)',t,'total range(cm)',totR,'final KE(MeV)',finalKE
             r.printSampleTable(samples)
             
-
+    slowtest = 1
+    if slowtest:
+        ke = 95. 
+        t  = 6.
+        mat = 'liquidwater'
+        totR, finalKE, samples = r.propagate('proton',mat,ke,t)
+        print '\n initial,final KE(MeV)',ke,finalKE,'thick',t,'of',mat,'dE/dx (MeV/cm)',(ke-finalKE)/t
