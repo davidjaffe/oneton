@@ -10,8 +10,8 @@ import sys
 import random
 
 class ProcessMaterialProperty():
-    defaultDir = 'DYBmaterials/' # '/Users/djaffe/Documents/Reactor/work/trunk/NuWa-trunk/dybgaudi/Detector/XmlDetDesc/DDDB/materials/'
-    otherDir   = './' # /Users/djaffe/PythonScripts/'
+    defaultDir ='/Users/djaffe/work/GIT/ONETON/DYBmaterials/'# 'DYBmaterials/' # '/Users/djaffe/Documents/Reactor/work/trunk/NuWa-trunk/dybgaudi/Detector/XmlDetDesc/DDDB/materials/'
+    otherDir   = '/Users/djaffe/work/GIT/ONETON/InputData/'#'./' # /Users/djaffe/PythonScripts/'
     def __init__(self,dbg=0):
         self.debug =  dbg
         self.Property = {}    # map of maps
