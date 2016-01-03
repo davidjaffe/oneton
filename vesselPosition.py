@@ -44,12 +44,16 @@ with open(fn,'rU') as csvfile:
 ## additional measurements to better constrain radial position of vessel bottom
 ## U1,V1 and U7,V7 are positions wrt platform U(Y) is in X(Y) direction
 U1 = [15.,18.,21.,24.,27.,30.,33.,36.] # inches
+sU1 = [1./4.*2.54 for x in U1] # 1/4" uncertainty
 U1 = [x*2.54 for x in U1] # convert to cm
 V1 = [20.6,16.7,14.2,12.8,12.8,14.0,16.1,19.9] # cm, estimated uncertainty is +-0.3cm
+sV1 = [0.3 for x in V1]
 
 U7 = [15.,18.,21.,24.,27.,30.,33.,36.] # inches
+sU7 = [1./4.*2.54 for x in U7]
 U7 = [x*2.54 for x in U7] # convert to cm
 V7 = [20.0,16.1,13.6,12.3,12.3,13.2,15.4,19.0] # cm
+sV7 = [0.3 for x in U7]
 
 # only 6 measurements in spreadsheet should be used.
 lastPosition = max(columns['position'])-1
@@ -93,21 +97,28 @@ for Side in ['right','left']:
 
     
 # use right side to correct U1,V1, U7,V7
-Xq,Yq = [],[]
+Xq,Yq,sXq,sYq = [],[],[],[]
 for u1,v1 in zip(U1,V1):
     delta = Slope['right']*(-offset/2.) + Intercept['right']
     x = u1 - delta - offset/2.
     y = offset/2. - v1
     Xq.append(x)
     Yq.append(y)
+sXq.extend( sU1 )
+sYq.extend( sV1 )
 for u7,v7 in zip(U7,V7):
     delta = Slope['right']*(offset/2.) + Intercept['right']
     x = u7 - delta - offset/2.
     y = -offset/2. + v7
     Xq.append(x)
     Yq.append(y)
+sXq.extend( sU7 )
+sYq.extend( sV7 )
 
-#    put information into more convenient form
+Xqave = sum(Xq)/float(len(Xq))
+Yqave = sum(Yq)/float(len(Yq))
+
+# put information into more convenient form
 X,Y = [],[]
 for w in ['Lcm','Rcm']:
     c = 'X'+w
@@ -116,9 +127,6 @@ for w in ['Lcm','Rcm']:
     c = 'Y'+w
     Y.extend(columns[c][:lastIndex])
 
-# append additional measurements        
-#X.extend(Xq)
-#Y.extend(Yq)
 
 # estimated measurement uncertainties
 sY = [1./16.*2.54 for y in Y]
@@ -128,6 +136,12 @@ for i,x in enumerate(X):
         sX.append(1./4.*2.54)
     else:
         sX.append(1./16.*2.54)
+
+# append additional measurements and uncertainties
+X.extend(Xq)
+Y.extend(Yq)
+sX.extend(sXq)
+sY.extend(sYq)
 
 
 #print 'X',X,'Y',Y
@@ -199,6 +213,8 @@ for j,x in enumerate(X):
     print 'x,y,phi,residual',x,y,phi,residual
 print 'chi2',chi2
 
+
+# draw a bunch of stuff
 rf = TFile('vP.root','RECREATE')
 title = 'residual vs phi'
 name = title.replace(' ','_')
@@ -213,16 +229,36 @@ phi0 = -math.pi
 nphi = 1000
 dphi = 2.*math.pi/float(nphi)
 Xfit,Yfit = [],[]
+Rdesign = 104.58/2. # design OD/2
+Xd,Yd = [],[] # design
+Xduv,Yduv = [],[] # design radius, center at average of U,V measurements
 for i in range(nphi):
     phi = phi0 + float(i)*dphi
     x = x0 + Rguess*math.cos(phi)
     y = y0 + Rguess*math.sin(phi)
     Xfit.append(x)
     Yfit.append(y)
+    Xd.append( 0. + Rdesign*math.cos(phi) )
+    Yd.append( 0. + Rdesign*math.sin(phi) )
+    Xduv.append( Xqave + Rdesign*math.cos(phi) )
+    Yduv.append( Yqave + Rdesign*math.sin(phi) )
 name = 'fitted_circle'
 title = name.replace('_',' ')
 g = gU.makeTGraph(Xfit,Yfit,title,name)
 gU.color(g,2,2,setMarkerColor=False,setMarkerType=False)
+tmg.Add(g)
+rf.WriteTObject(g)
+
+name = title = 'design'
+g = gU.makeTGraph(Xd,Yd,title,name)
+gU.color(g,4,4,setMarkerColor=False,setMarkerType=False)
+tmg.Add(g)
+rf.WriteTObject(g)
+
+name = 'design_center_at_uv_average'
+title = name.replace('_',' ')
+g = gU.makeTGraph(Xduv,Yduv,title,name)
+gU.color(g,5,5,setMarkerColor=False,setMarkerType=False)
 tmg.Add(g)
 rf.WriteTObject(g)
 
