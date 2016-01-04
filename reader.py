@@ -16,9 +16,9 @@ class reader():
             print 'first event'
             print EvtDir[evtkey]
             for thing in EvtDir[evtkey]:
-                print thing,
-                for x in EvtDir[evtkey][thing]:
-                    print x,
+                print thing,EvtDir[evtkey][thing],'shape:',EvtDir[evtkey][thing].shape,'dtype:',EvtDir[evtkey][thing].dtype
+    #            for x in EvtDir[evtkey][thing]:
+    #                print x,
                 print ''
             break
         return
