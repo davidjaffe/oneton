@@ -10,10 +10,13 @@ import graphUtils
 from ROOT import TFile
 import math
 import numpy
+import sys
 
 class hvscan():
-    def __init__(self):
+    def __init__(self,mode):
+        self.mode = mode
         self.fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Installation/HVscan_20151230.csv'
+        if mode==1: self.fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Installation/HVscan_20160104.csv'
         self.figdir = 'Figures/HVscan/'
         self.columns = {}
         self.colhdrs = []
@@ -37,23 +40,45 @@ class hvscan():
                     for x in l:
                         if x!='':
                             colhdrs.append(x)
-                            if x[0]=='s': sgnlhdrs.append(x)
+                            if 's' in x:
+                                if mode==0 and x[0]=='s': sgnlhdrs.append(x)
+                                if mode==1 and 'hv' not in x: sgnlhdrs.append(x)
                             columns[x] = []
                 else:
-                    for i,x in enumerate(l):
-                        if i<len(colhdrs):
-                            if x=='':
+                    if mode==0:
+                        for i,x in enumerate(l):
+                            if i<len(colhdrs):
+                                if x=='':
+                                    fx = -1.
+                                elif int(x)==-1:
+                                    fx = -1.
+                                else:
+                                    fx = float(x)
+                                columns[colhdrs[i]].append(fx)
+                    elif mode==1:
+                        lcm1 = len(columns[colhdrs[0]])-1
+                        #print l
+                        #print 'lcm1',lcm1
+                        for i,x in enumerate(l):
+                            #print i,x
+                            if i<len(colhdrs):
                                 fx = -1.
-                            elif int(x)==-1:
-                                fx = -1.
-                            else:
-                                fx = float(x)
-                            columns[colhdrs[i]].append(fx)
+                                if x=='' or x==' ' or x=='  ':
+                                    if 'hv' in colhdrs[i] and lcm1>=0:
+                                        fx = columns[colhdrs[i]][lcm1]
+                                else:
+                                    fx = float(x)
+                                columns[colhdrs[i]].append(fx)
+                    else:
+                        s = 'hvscan.process: Invalid mode ' + str(mode)
+                        sys.exit(s)
         print 'hvscan.process:',len(colhdrs),'column headers:',[x for x in colhdrs]
         self.columns = columns
         self.colhdrs = colhdrs
         self.sgnlhdrs= sgnlhdrs
+        print 'hvscan.process: mode',mode,'sgnlhdrs',sgnlhdrs
         self.Graphs = {}
+        #self.printRaw('s5')
         return
     def winnow(self,Xin,Yin):
         '''
@@ -65,22 +90,56 @@ class hvscan():
                 X.append(x)
                 Y.append(y)
         return X,Y
+    def printRaw(self,sc):
+        '''
+        print the columns with header matching input string sc
+        '''
+        colhdrs,columns,mode = self.colhdrs,self.columns,self.mode
+        hdrs = []
+        for hdr in colhdrs:
+            if sc in hdr: hdrs.append(hdr)
+        print '\n hvscan.printRaw input string is',sc
+        s = [hdr+' ' for hdr in hdrs]
+        print s
+        if len(s)==0: return
+        for irow in range(len(columns[hdrs[0]])):
+            s = ''
+            for hdr in hdrs:
+                s += str(columns[hdr][irow]) + ' '
+            print s
+        return
+                
+
+            
     def plotRaw(self):
         '''
         plot counts/10 sec for each HV value.
         exclude negative values
         '''
-        colhdrs,columns = self.colhdrs,self.columns
-        for icol,hdr in enumerate(colhdrs):
-            Xin = [abs(x) for x in columns['HV']]
-            if hdr!='HV':
-                Yin = columns[hdr]
-                X,Y = self.winnow(Xin,Yin)
-                title = hdr + ' raw data'
-                name = title.replace(' ','_')
-                g = self.Graphs[name] = self.gU.makeTGraph(X,Y,title,name)
-                self.gU.color(g,icol,icol,setMarkerColor=True)
-                self.gU.drawGraph(g,figDir=self.figdir,option='AP')
+        colhdrs,columns,mode = self.colhdrs,self.columns,self.mode
+        if mode==0:
+            for icol,hdr in enumerate(colhdrs):
+                Xin = [abs(x) for x in columns['HV']]
+                if hdr!='HV':
+                    Yin = columns[hdr]
+                    X,Y = self.winnow(Xin,Yin)
+                    title = hdr + ' raw data'
+                    name = title.replace(' ','_')
+                    g = self.Graphs[name] = self.gU.makeTGraph(X,Y,title,name)
+                    self.gU.color(g,icol,icol,setMarkerColor=True)
+                    self.gU.drawGraph(g,figDir=self.figdir,option='AP')
+        elif mode==1:
+            for icol,hdr in enumerate(colhdrs):
+                if 'hv' in hdr:
+                    jcol = icol+1
+                    Xin = columns[hdr]
+                    Yin = columns[colhdrs[jcol]]
+                    X,Y = self.winnow(Xin,Yin)
+                    title = hdr + ' raw data'
+                    name = title.replace(' ','_')
+                    g = self.Graphs[name] = self.gU.makeTGraph(X,Y,title,name)
+                    self.gU.color(g,icol/2,icol/2,setMarkerColor=True)
+                    self.gU.drawGraph(g,figDir=self.figdir,option='AP')                    
         return
     def calcRate(self,Xin,Yin,LEDin):
         Rate,dRate = {},{}
@@ -133,11 +192,14 @@ class hvscan():
         '''
         tmg = self.gU.makeTMultiGraph('bkgd_sub_rates')
         nmg = self.gU.makeTMultiGraph('normed_bkgd_sub_rates')
-        colhdrs,sgnlhdrs,columns = self.colhdrs,self.sgnlhdrs,self.columns
+        colhdrs,sgnlhdrs,columns,mode = self.colhdrs,self.sgnlhdrs,self.columns,self.mode
         for icol,hdr in enumerate(colhdrs):
             #print hdr
             if hdr in sgnlhdrs:
-                Xin = [abs(x) for x in columns['HV']]
+                if mode==0:
+                    Xin = [abs(x) for x in columns['HV']]
+                elif mode==1:
+                    Xin = [abs(x) for x in columns[hdr+'hv']]
                 LEDcts = columns['led']
                 Yin = columns[hdr]
                 X,Y,eX,eY = self.calcRate(Xin,Yin,LEDcts)
@@ -166,9 +228,11 @@ class hvscan():
         '''
         plot useful info
         '''
-        colhdrs,sgnlhdrs,columns = self.colhdrs,self.sgnlhdrs,self.columns
+        colhdrs,sgnlhdrs,columns,mode = self.colhdrs,self.sgnlhdrs,self.columns,self.mode
         hlist = []
-        for hdr in ['cosmic','led']:
+        if mode==0: hdrlist = ['cosmic','led']
+        if mode==1: hdrlist = ['led']
+        for hdr in hdrlist:
             X = []
             for x in columns[hdr]:
                 if x>=0.: X.append(x/10.)
@@ -181,7 +245,9 @@ class hvscan():
         self.gU.drawMultiHists(hlist,figdir=self.figdir)
         return
 if __name__ == '__main__' :
-    r = hvscan()
+    mode = 0 # 20151230 scan
+    mode = 1 # 20160104 scan
+    r = hvscan(mode)
     r.process()
     r.plotInfo()
     r.plotRaw()
