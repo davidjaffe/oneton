@@ -7,6 +7,9 @@ import h5py
 import numpy
 import graphUtils
 from ROOT import TFile
+import sys
+import datetime
+
 
 
 class reader():
@@ -14,39 +17,27 @@ class reader():
         self.datasetNames = [ "Digitizer_1","Digitizer_2", "Event_Temp", "Event_Time", "QDC_1","QDC_2", "Scaler", "TDC"]
         self.scalerTypes =  ['float32','float64','uint32']
 
-        # used in unpackConfigurationSettings
-        self.iDNCAT = None
-        self.hiQDCbinwidth = None
-        self.hiQDCthresbin = None
-        self.loQDCbinwidth = None
-        self.loQDCthresbin = None
-        self.TDCbinwidth   = None
-        self.TDCthresbin   = None
-
         
         self.gU = graphUtils.graphUtils()
         print 'reader: initialized'
         return
-    def first(self,fn=None):
-        print '\n reader.first filename is',fn
+    def start(self,fn=None):
+        '''
+        start of run initialization
+        '''
         f = h5py.File(fn)
-        for x in f: print x,
-        print ''
+        print 'reader.start run. File',fn
+        self.RunInfo = f['Run_Info']
+        self.CalData = f['Calibration']
+        self.EvtDir  = f['Events']
 
-        RunInfo = f['Run_Info']
-        CalData = f['Calibration']
-        EvtDir = f['Events']
+        return
+    def getEvtDir(self):
+        return self.EvtDir
+    def getCalData(self):
+        return self.CalData
+    def first(self,fn=None):
 
-        print 'RunInfo:'
-        for x in RunInfo:
-            print x,RunInfo[x]
-            for y in RunInfo[x]:
-                print y,RunInfo[x][y],RunInfo[x][y][()]
-        
-        self.unpackRunInfo(RunInfo)
-
-        
-        #print EvtDir
         Hists = []
         for evtkey in EvtDir.keys():
             print 'first event'
@@ -85,51 +76,127 @@ class reader():
         rf.Close()
         print 'wrote',len(Hists),'hists to',rfn
         return
-    def unpackRunInfo(self,raw):
-        print 'Elements in RunInfo'
-        for elm in raw:
-            print '\n',elm
-            if elm=='Configuration_Settings':
-                self.unpackConfigurationSettings(raw[elm])
-            elif elm=='Digitizer_Data':
-                for x in raw[elm]: print x
-                print ''
-                self.unpackDigitizerData(raw[elm])
-            elif elm=='QDC_Data':
-                print ''
-            elif elm== 'Run_Details':
-                print ''
-            elif elm== 'Scaler_Data':
-                print ''
-            elif elm== 'TDC_Data':
-                print ''
-            elif elm== 'Temperature':
-                print ''
-            elif elm== 'Time_Info':
-                print ''
-            elif elm== 'Trigger_Bits':
-                print ''
-            elif elm== 'VME_Configuration':
-                print ''
-            else:
-                w = 'reader.unpackRunInfo: WARNING Unexpected element',elm
-                print w
+    def testGet(self):
+        '''
+        exercise getXXX modules for RunInfo
+        '''
+        print 'reader.testGet....................................'
+        for Q in ['Run_Number','Run_Type','Material','Comments']: print 'RunDetail',Q,self.getRunDetail(Q)
+        print 'TrigBits',self.getTriggerBits('anything')
+        print 'Temperature',self.getTemperature()
+        for Q in ['Start_Time_str','Start_Time_UNIX','datetime']: print 'Time',Q,self.getTime(Q)
+        for Q in ['Model_Name','Module_Description','VME_Address']: print 'VMEConfig',Q,self.getVMEConfig(Q)
+        print 'Digitizer_Num_Cols_After_Trig',self.getDigitizerNumColAfterTrig()
+        for Q in ['HighWidth','LowWidth','HighThres','LowThres']:
+            print 'QDC'+Q,self.getQDCConfig(Q)
+        for Q in ['width','thres']:
+            print 'TDC'+Q,self.getTDCConfig(Q)
+        for M in ['Digitizer_Data','TDC_Data','QDC_Data','Scaler_Data']:
+            for Q in ['ChanDesc','Hodo']: print 'ModuleData',M,Q,self.getModuleData(M,Q)
+        print '............................................reader.testGet'
         return
-    def unpackDigitizerData(self,raw):
-        self.wfdChanDesc = [x for x in raw['Channel_Description']]
-        self.wfdOHodo = raw['Only_Hodo']
-        print 'wfdChanDesc:',self.wfdChanDesc
-
+    def getTriggerBits(self,Q):
+        '''
+        from RunInfo return definition of trigger bits given input Q
+        there is only one valid input Q
+        '''
+        TB = self.RunInfo['Trigger_Bits']
+        if Q in TB: return [x for x in TB[Q]]
+        return [x for x in TB['Description_of_Trigger_Bits']]
+    def getVMEConfig(self,Q):
+        '''
+        from RunInfo return config of VME slots model, module descrip, VME address
+        '''
+        VC = self.RunInfo['VME_Configuration']
+        if Q in VC: return [x for x in VC[Q]]
+        sys.exit('reader.getVMEConfig ERROR Invalid input '+Q)
         return
-
-    def unpackConfigurationSettings(self,raw):
-        self.iDNCAT = raw['Digitizer_Num_Cols_After_Trig']
-        self.hiQDCbinwidth = raw['QDC_High_Range_Bin_Width_fC']
-        self.hiQDCthresbin = raw['QDC_High_Range_Threshold_bin']
-        self.loQDCbinwidth = raw['QDC_Low_Range_Bin_Width_fC']
-        self.loQDCthresbin = raw['QDC_Low_Range_Threshold_bin']
-        self.TDCbinwidth   = raw['TDC_Bin_Width_ns']
-        self.TDCthresbin   = raw['TDC_Threshold_bin']
+    def getTime(self,Q):
+        '''
+        from RunInfo return start time as string, unix time or as datetime object
+        '''
+        TI = self.RunInfo['Time_Info']
+        if Q in TI: return TI[Q][()]
+        if Q.lower()=='datetime':
+            S = TI['Start_Time_str'][()] # unused for now
+            U = TI['Start_Time_UNIX'][()]
+            return datetime.datetime.fromtimestamp(U)
+        sys.exit('reader.getTime ERROR Invalid input '+Q)
+        return
+    def getTemperature(self):
+        '''
+        from RunInfo return position of temperature probes
+        '''
+        return self.RunInfo['Temperature']['Location'][()]
+    def getRunDetail(self,Q):
+        '''
+        from RunInfo return details of run
+        run number
+        run type
+        material in vessel
+        comments
+        '''
+        RD = self.RunInfo['Run_Details']
+        if Q in RD          : return RD[Q][()]
+        if Q.lower()=='run' : return RD['Run_Number'][()]
+        if Q.lower()=='type': return RD['Run_Type'][()]
+        sys.exit('reader.getRunDetail ERROR Invalid input '+Q)
+        return
+    def reportRunDetail(self):
+        '''
+        summarize run details
+        '''
+        runnum = self.getRunDetail('run')
+        runtype= self.getRunDetail('type')
+        mat    = self.getRunDetail('Material')
+        st     = self.getTime('Start_Time_str')
+        c      = self.getRunDetail('Comments')
+        print runtype,'run',runnum,'Start',st,'Fill',mat
+        print c
+        return
+    def getModuleData(self,module,Q):
+        '''
+        from RunInfo return per channel info for QDC, TDC, Scaler
+        '''
+        m = module 
+        if module not in self.RunInfo:
+            m = module + '_Data'
+            if m not in self.RunInfo:
+                sys.exit('self.getModuleData ERROR Invalid module '+module)
+        DD = self.RunInfo[m]
+        if Q in DD      : return [x for x in DD[Q]]
+        if Q=='ChanDesc': return [x for x in DD['Channel_Description']]
+        if Q=='Hodo'    : return [x for x in DD['Only_Hodo']]
+        sys.exit('self.getModuleData ERROR Module Invalid input quantity '+Q)
+        return
+    def getDigitizerNumColAfterTrig(self):
+        return self.RunInfo['Configuration_Settings']['Digitizer_Num_Cols_After_Trig'][()]
+    def getQDCConfig(self,Q):
+        '''
+        from RunInfo return QDC configuration setting given input string Q
+        high or low range bin width in fC
+        high or low range threshold bin
+        fail if Q is invalid
+        '''
+        CS = self.RunInfo['Configuration_Settings']
+        if Q in CS: return CS[Q][()]
+        if Q=='HighWidth': return CS['QDC_High_Range_Bin_Width_fC'][()]
+        if Q=='LowWidth' : return CS['QDC_Low_Range_Bin_Width_fC'][()]
+        if Q=='HighThres': return CS['QDC_High_Range_Threshold_bin'][()]
+        if Q=='LowThres' : return CS['QDC_Low_Range_Threshold_bin'][()]
+        sys.exit('reader.getQDCConfig ERROR Invalid input quantity ' + Q)
+        return 
+    def getTDCConfig(self,Q):
+        '''
+        from RunInfo return TDC configuration setting given input string Q
+        TDC bin width in ns
+        TDC threshold bin
+        '''
+        CS = self.RunInfo['Configuration_Settings']
+        if Q in CS: return CS[Q][()]
+        if Q=='width' or Q=='binwidth': return CS['TDC_Bin_Width_ns'][()]
+        if Q=='thres' : return CS['TDC_Threshold_bin'][()]
+        sys.exit('reader.getTDCConfig ERROR Invalid input quantity ' + Q)
         return
     def displayWFD(self,WFD,pretitle=''):
         '''
@@ -156,12 +223,42 @@ class reader():
         for i,x in enumerate(data):
             d[i] = numpy.array(x)
         return d
+    def unpackTDC(self,raw,mode=None):
+        '''
+        return array of pairs (channel, TDC(channel) ) given mode
+        mode = None, 'raw' => raw data
+        mode = 'inns' => convert raw data to ns
+        '''
+        if mode is None or mode=='raw':
+            TDC = numpy.array(raw)
+        elif mode=='inns':
+            c = self.getTDCConfig('width')
+            TDC = []
+            for pair in raw:
+                TDC.append( [pair[0], c*float(pair[1])] )
+        else:
+            sys.exit('reader.unpackTDC ERROR Invalid mode '+mode)
+        return TDC
     def unpackScaler(self,raw):
         '''
         unpack sl
         '''
         s = numpy.array(raw)
         return s
+    def printDataset(self,X):
+        '''
+        avoid annoying "TypeError: Can't iterate over a scalar dataset"
+        when trying to print
+        '''
+        if X.size==1.:
+            more = False
+            print X[()],
+        else:
+            more = True
+            print X,
+
+        print ''
+        return more
 if __name__ == '__main__' :
     r = reader()
     fn = '/Users/djaffe/work/1TonData/run462.h5'
