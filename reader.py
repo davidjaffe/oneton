@@ -17,6 +17,8 @@ class reader():
         self.datasetNames = [ "Digitizer_1","Digitizer_2", "Event_Temp", "Event_Time", "QDC_1","QDC_2", "Scaler", "TDC"]
         self.scalerTypes =  ['float32','float64','uint32']
 
+        self.validTriggers = ['CT','M','LED','CT+M+LED'] # as of 20160106
+        self.triggerOR     = ['CT+M+LED']
         
         self.gU = graphUtils.graphUtils()
         print 'reader: initialized'
@@ -142,6 +144,8 @@ class reader():
         if Q.lower()=='type': return RD['Run_Type'][()]
         sys.exit('reader.getRunDetail ERROR Invalid input '+Q)
         return
+    def getRunNum(self):
+        return self.getRunDetail('run')
     def reportRunDetail(self):
         '''
         summarize run details
@@ -245,6 +249,22 @@ class reader():
         '''
         s = numpy.array(raw)
         return s
+    def unpackTrigger(self,raw):
+        '''
+        return list of triggers that fired based on TDC information
+        excludin the OR of all triggers
+        '''
+        TDCmd = self.getModuleData('TDC','ChanDesc')
+        trigs = []
+        for pair in raw:
+            T = TDCmd[int(pair[0])]
+            if  T in self.validTriggers:
+                trigs.append(T)
+        # special treatment since LED signal is outside TDC dynamic range
+        if trigs==self.triggerOR : trigs.append('LED')
+        # exclude OR of all triggers
+        trigs.remove(self.triggerOR[0])
+        return trigs
     def printDataset(self,X):
         '''
         avoid annoying "TypeError: Can't iterate over a scalar dataset"
