@@ -14,9 +14,20 @@ import datetime
 
 class reader():
     def __init__(self):
-        self.datasetNames = [ "Digitizer_1","Digitizer_2", "Event_Temp", "Event_Time", "QDC_1","QDC_2", "Scaler", "TDC"]
         self.scalerTypes =  ['float32','float64','uint32']
 
+        # used by unpackEvent, summary
+        self.datasetNames = [ "Digitizer_1","Digitizer_2", "Event_Temp", "Event_Time", "QDC_1","QDC_2", "Scaler", "TDC"]
+        
+        self.QDCNames = [x for x in self.datasetNames if 'QDC' in x]
+        self.TDCNames = [x for x in self.datasetNames if 'TDC' in x]
+        self.WFDNames = [x for x in self.datasetNames if 'Digitizer' in x]
+        #print 'reader.init QDCnames',self.QDCNames,'TDCNames',self.TDCNames,'WFDNames',self.WFDNames
+        
+        self.eventCalls = 0
+        self.incompleteEvents = {}
+
+        # used by unpackTrigger
         self.validTriggers = ['CT','M','LED','CT+M+LED'] # as of 20160106
         self.triggerOR     = ['CT+M+LED']
         
@@ -27,57 +38,41 @@ class reader():
         '''
         start of run initialization
         '''
-        f = h5py.File(fn)
+        self.f = h5py.File(fn,'r')
         print 'reader.start run. File',fn
-        self.RunInfo = f['Run_Info']
-        self.CalData = f['Calibration']
-        self.EvtDir  = f['Events']
+        
+        self.RunInfo = self.f['Run_Info']
+        if 'Calibration' in self.f:
+            self.CalData = self.f['Calibration']
+        else:
+            self.CalData = None
+            print 'XXXXXXXXXXXXXX NO CALIBRATION DATA IN FILE XXXXXXXXXXX'
+        self.EvtDir  = self.f['Events']
 
+        return
+    def closeHDF5File(self):
+        '''
+        close the current HDF5
+        '''
+        name = self.f.filename
+        self.f.close()
+        print 'reader.closeHDF5File closed',name
+        return
+    def summary(self):
+        '''
+        summary of stats accumulated by reader
+        '''
+        L = len(self.incompleteEvents)
+        print ' ++++++ reader.summary',self.eventCalls,'events with',L,'events with a missing dataset'
+        if L>0:
+            print ' ++++++ reader.summary missing datasets',
+            for x in self.incompleteEvents: print self.incompleteEvents[x],x,',',
+            print ''
         return
     def getEvtDir(self):
         return self.EvtDir
     def getCalData(self):
         return self.CalData
-    def first(self,fn=None):
-
-        Hists = []
-        for evtkey in EvtDir.keys():
-            print 'first event'
-            print evtkey,EvtDir[evtkey],EvtDir[evtkey].name
-
-            for thing in self.datasetNames: #EvtDir[evtkey]:
-                d = EvtDir[evtkey][thing].dtype
-                print thing,EvtDir[evtkey][thing],'shape:',EvtDir[evtkey][thing].shape,'dtype:',EvtDir[evtkey][thing].dtype,EvtDir[evtkey][thing].name
-                if d in self.scalerTypes:
-                    print thing,EvtDir[evtkey][thing][()]
-                else:
-                    for x in EvtDir[evtkey][thing]:
-                        print x,
-                    print ''
-                if 'Scaler' in thing:
-                    scaler = self.unpackScaler(EvtDir[evtkey][thing])
-
-                    print ''
-                        
-                if 'Digitizer' in thing:
-                    WFD = self.unpackDigitizer(EvtDir[evtkey][thing])
-                    WFDps=self.unpackDigitizer(EvtDir[evtkey][thing],CalData[thing]['Pedestal'])
-                    #print thing,'WFD',WFD
-                    #print 'ped-subtracted',WFDps
-                    H = self.displayWFD(WFD,pretitle=thing+'raw')
-                    Hists.extend(H)
-                    Hps = self.displayWFD(WFDps,pretitle=thing+'pedsub')
-                    Hists.extend(Hps)
-                    self.gU.drawMultiHists(H,fname=thing+'raw',figdir='Figures/WF/',dopt='HIST',statOpt=0)
-                    self.gU.drawMultiHists(Hps,fname=thing+'pedsub',figdir='Figures/WF/',dopt='HIST',statOpt=0)
-
-            break
-        rfn = 'rdr.root'
-        rf = TFile(rfn,"RECREATE")
-        for h in Hists: rf.WriteTObject(h)
-        rf.Close()
-        print 'wrote',len(Hists),'hists to',rfn
-        return
     def testGet(self):
         '''
         exercise getXXX modules for RunInfo
@@ -171,7 +166,7 @@ class reader():
         if Q in DD      : return [x for x in DD[Q]]
         if Q=='ChanDesc': return [x for x in DD['Channel_Description']]
         if Q=='Hodo'    : return [x for x in DD['Only_Hodo']]
-        sys.exit('self.getModuleData ERROR Module Invalid input quantity '+Q)
+        sys.exit('reader.getModuleData ERROR Module Invalid input quantity '+Q)
         return
     def getDigitizerNumColAfterTrig(self):
         return self.RunInfo['Configuration_Settings']['Digitizer_Num_Cols_After_Trig'][()]
@@ -202,18 +197,79 @@ class reader():
         if Q=='thres' : return CS['TDC_Threshold_bin'][()]
         sys.exit('reader.getTDCConfig ERROR Invalid input quantity ' + Q)
         return
-    def displayWFD(self,WFD,pretitle=''):
+    def displayWFD(self,WFD,pretitle='',ipt=None):
         '''
         return list of histograms, one per WFD channel
         use pretitle to make hist name, title
+        OR use ipt as title of each channel
         '''
         H = []
-        for chan in WFD:
+        pret = ipt
+        if ipt is None:
+            pret = []
+            for chan in WFD: pret.append(pretitle + str(chan))
+        elif len(ipt)<len(WFD):
+            pret = []
+            for chan in WFD: pret.append(pretitle + str(chan))
+                
+
+        #print 'reader.displayWFD len(ipt),len(WFD),pret',len(ipt),len(WFD),pret
+        
+        for p,chan in zip(pret,WFD):
             bins = numpy.array(range(len(WFD[chan])))
-            title = pretitle + ' ' + str(chan)
+            title = p
             h = self.gU.makeTH1Dwtd(bins,WFD[chan],title)
             H.append(h)
         return H
+    def addChanDesc(self,Unpack,module):
+        '''
+        given list of unpacked data for TDC, QDC or Digitizer and the module
+        return ordered list of channel description
+
+        Assumes single TDC, two QDCs, two WFDs
+        '''
+        CD = []
+
+        s  = 'ChanDesc'
+        if module in self.TDCNames:
+            names = self.getModuleData(module,s)
+            for b in Unpack:
+                i = int(b[0])
+                CD.append( names[i] )
+        elif module in self.QDCNames:
+            names = self.getModuleData('QDC',s)
+            i0 = 0
+            if '2' in module: i0 = 8
+            for b in Unpack:
+                i = i0 + int(b[0])
+                CD.append( names[i] )
+        elif module in self.WFDNames:
+            names = self.getModuleData('Digitizer',s)
+            i0 = 0
+            if '2' in module: i0 = 4
+            for j,b in enumerate(Unpack):
+                i = i0 + j
+                CD.append( names[i] )
+            pass
+        else:
+            w = 'reader.addChanDesc ERROR Invalid module '+module
+            sys.exit(w)
+        return CD
+    def unpackEvent(self,raw):
+        '''
+        check that all datasets are present in event
+        return list of missing datasets and tally it
+        '''
+        self.eventCalls += 1
+        missing = []
+        for ds in self.datasetNames:
+            if ds in raw:
+                continue
+            else:
+                missing.append(ds)
+                if ds not in self.incompleteEvents: self.incompleteEvents[ds] = 0.
+                self.incompleteEvents[ds] += 1
+        return missing
     def unpackDigitizer(self,raw,ped=None):
         '''
         unpack 4 channel digitizer input
@@ -243,6 +299,9 @@ class reader():
         else:
             sys.exit('reader.unpackTDC ERROR Invalid mode '+mode)
         return TDC
+    def unpackQDC(self,raw):
+        s = numpy.array(raw)
+        return s
     def unpackScaler(self,raw):
         '''
         unpack sl
