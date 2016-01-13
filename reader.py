@@ -30,6 +30,8 @@ class reader():
         # used by unpackTrigger
         self.validTriggers = ['CT','M','LED','CT+M+LED'] # as of 20160106
         self.triggerOR     = ['CT+M+LED']
+        self.uniqueTriggers = [x for x in self.validTriggers if x not in self.triggerOR]
+        #print 'reader__init__ self.uniqueTriggers',self.uniqueTriggers
         
         self.gU = graphUtils.graphUtils()
         print 'reader: initialized'
@@ -197,6 +199,17 @@ class reader():
         if Q=='thres' : return CS['TDC_Threshold_bin'][()]
         sys.exit('reader.getTDCConfig ERROR Invalid input quantity ' + Q)
         return
+    def displayWFDnew(self,WFD,detel,pretitle=None):
+        '''
+        return a single histogram of input waveform
+        hist name and title derived from pretitle and detel = detector element
+        '''
+        title = detel
+        if pretitle is not None: title = pretitle + detel
+        #print 'reader.displayWFDnew detel,WFD=',detel,WFD
+        bins = numpy.array(range(len(WFD)))
+        h = self.gU.makeTH1Dwtd(bins,WFD,title)
+        return h
     def displayWFD(self,WFD,pretitle='',ipt=None):
         '''
         return list of histograms, one per WFD channel
@@ -270,6 +283,27 @@ class reader():
                 if ds not in self.incompleteEvents: self.incompleteEvents[ds] = 0.
                 self.incompleteEvents[ds] += 1
         return missing
+    def assocWFD(self,raw,pedsub=False):
+        '''
+        input is signal event, pedsub=True, then subtract pedestals, otherwise no.
+        generate error if pedestals are not available
+        return dict with key=detector element, value = array of WF data
+        '''
+        if pedsub and (self.CalData is None):
+            sys.exit('\n reader.assocWFD ERROR Cannot subtract pedestals. No pedestal data available \n')
+            
+        U,WFD = {},{}
+        for Q in self.WFDNames:
+            if pedsub:
+                U[Q] = self.unpackDigitizer(raw[Q],ped=self.CalData[Q]['Pedestal'])
+            else:
+                U[Q] = self.unpackDigitizer(raw[Q])
+            cd  = self.addChanDesc(U[Q],Q)
+            #print 'readder.assocWFD Q,U[Q],cd',Q,U[Q],cd
+            for x,y in zip(cd,U[Q]): WFD[x] = U[Q][y]
+        #print 'reader.assocWFD U=',U
+        #print 'reader.assocWFD WFD=',WFD
+        return WFD
     def unpackDigitizer(self,raw,ped=None):
         '''
         unpack 4 channel digitizer input
@@ -283,15 +317,27 @@ class reader():
         for i,x in enumerate(data):
             d[i] = numpy.array(x)
         return d
+    def assocTDC(self,raw,mode=None):
+        '''
+        input is a single event
+        return dict with key=det element, value = TDC value
+        mode is defined in unpackTDC
+        '''
+        TDC,U = {},{}
+        for Q in self.TDCNames:
+            U[Q] = self.unpackTDC(raw[Q],mode=mode)
+            cd  = self.addChanDesc(U[Q],Q)
+            for x,y in zip(cd,U[Q]): TDC[x] = y
+        return TDC
     def unpackTDC(self,raw,mode=None):
         '''
         return array of pairs (channel, TDC(channel) ) given mode
         mode = None, 'raw' => raw data
-        mode = 'inns' => convert raw data to ns
+        mode = 'inns','ns' => convert raw data to ns
         '''
         if mode is None or mode=='raw':
             TDC = numpy.array(raw)
-        elif mode=='inns':
+        elif mode=='inns' or mode=='ns':
             c = self.getTDCConfig('width')
             TDC = []
             for pair in raw:
@@ -299,6 +345,27 @@ class reader():
         else:
             sys.exit('reader.unpackTDC ERROR Invalid mode '+mode)
         return TDC
+    def assocQDC(self,raw,removeNC=True):
+        '''
+        input is a single event
+        if removeNC is True, then output dict will not have detector elements 'N/C'
+        return dict with key=detector element (i.e., 'S0'), value = list of QDC elements
+        each QDC element is an array (chan#, value, lo/hi, overflow?)
+        
+        '''
+        U = {}
+        QDC = {}
+        for Q in self.QDCNames:
+            U[Q] = self.unpackQDC(raw[Q])
+            cd  = self.addChanDesc(U[Q],Q)
+            for x,y in zip(cd,U[Q]):
+                if removeNC and x=='N/C':
+                    pass
+                else:
+                    if x not in QDC: QDC[x] = []
+                    QDC[x].append(y)
+        return QDC
+
     def unpackQDC(self,raw):
         s = numpy.array(raw)
         return s
@@ -316,6 +383,7 @@ class reader():
         TDCmd = self.getModuleData('TDC','ChanDesc')
         trigs = []
         for pair in raw:
+            #print 'reader.unpackTrigger pair',pair
             T = TDCmd[int(pair[0])]
             if  T in self.validTriggers:
                 trigs.append(T)
