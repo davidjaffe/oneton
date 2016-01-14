@@ -199,7 +199,7 @@ class reader():
         if Q=='thres' : return CS['TDC_Threshold_bin'][()]
         sys.exit('reader.getTDCConfig ERROR Invalid input quantity ' + Q)
         return
-    def displayWFDnew(self,WFD,detel,pretitle=None):
+    def displayWFDnew(self,WFD,detel,pretitle=None,NX=None,XMI=None,XMA=None):
         '''
         return a single histogram of input waveform
         hist name and title derived from pretitle and detel = detector element
@@ -208,7 +208,7 @@ class reader():
         if pretitle is not None: title = pretitle + detel
         #print 'reader.displayWFDnew detel,WFD=',detel,WFD
         bins = numpy.array(range(len(WFD)))
-        h = self.gU.makeTH1Dwtd(bins,WFD,title)
+        h = self.gU.makeTH1Dwtd(bins,WFD,title,NX=NX,XMI=XMI,XMA=XMA)
         return h
     def displayWFD(self,WFD,pretitle='',ipt=None):
         '''
