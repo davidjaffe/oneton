@@ -13,10 +13,12 @@ import reader
 import math
 import os
 import Logger
+import wfanal
 
 class process():
     def __init__(self):
         self.R = reader.reader()
+        self.W = wfanal.wfanal()
         self.gU= graphUtils.graphUtils()
         self.Hists = {}
         self.TDChistnames = {}
@@ -55,6 +57,7 @@ class process():
     def start(self):
         self.bookHists('TDC')
         self.bookHists('QDC')
+        self.bookHists('WFD')
         return
     def startRun(self,file=None,tG=False):
         print 'process.startRun',file
@@ -210,9 +213,35 @@ class process():
                 #print 'process.bookHists name,Hists[name]',name,Hists[name]
                 for i,w in enumerate(md):
                     h.GetYaxis().SetBinLabel(i+1,w)
-        if OK: print 'process.bookHists booked',kind,'hists'
+        if kind=='WFD':
+            OK = True
+            md = self.R.getModuleData('Digitizer','ChanDesc')
+            for tl in TL:
+                ny = len(md)
+                ymi = -0.5
+                yma = ymi + float(ny)
+                for pren in ['time','area','ped','npulse','nsubp']:
+                    name = pren + '_vs_WFD_' + tl
+                    nx,xmi = 4096,-0.5
+                    xma = xmi + float(nx)
+                    if pren=='area':
+                        nx,xma = 1000,100.
+                        xmi = xma - float(nx)
+                    if pren=='ped':
+                        nx,xmi = 100,1900.
+                        xma = xmi + 2*float(nx)
+                    if pren=='npulse' or pren=='nsubp':
+                        nx,xmi = 11,-0.5
+                        xma = xmi + float(nx)
+                    title = name.replace('_',' ')
+                    Hists[name] = h = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
+                    for i,w in enumerate(md):
+                        h.GetYaxis().SetBinLabel(i+1,w)
+        if OK:
+            print 'process.bookHists booked',kind,'hists'
+        else:
+            print 'process.bookHists Invalid input',kind
         return
-                
     def eventLoop(self,maxEvt=99999999,dumpAll=False):
         '''
         loop over events in order of increasing event number
@@ -238,12 +267,7 @@ class process():
                 triggers = self.R.unpackTrigger(Event['TDC'])
                 self.analTDC(Event['TDC'])
                 self.analQDC(Event,evtnum)
-                Draw = triggers==['CT']
-                if 0:
-                    X1 = Event['Digitizer_1']
-                    X2 = Event['Digitizer_2']
-                    self.analWFD(X1,'Digitizer_1',evtnum)
-                    self.analWFD(X2,'Digitizer_2',evtnum)
+                self.analWFD(Event,evtnum)
                 
             if dumpEvt:
                 self.dumpEvent(Event,evtnum)
@@ -380,29 +404,38 @@ class process():
                     
         return
         
-    def analWFD(self,raw,module,evtnum,Draw=False):
+    def analWFD(self,raw,evtnum):
         '''
         unpack and pedestal subtract waveforms
         FIXME
         '''
         display = False
-        
+
+        TL = ['All']
+        TL.extend(self.R.unpackTrigger(raw['TDC']))
+                
         runnum = self.R.getRunDetail('run')
         pretitle = 'r'+str(runnum)+'e'+str(evtnum)
-
-        WFD = self.R.unpackDigitizer(raw)
-
-        if self.R.CalData is not None:
-            WFDps = self.R.unpackDigitizer(raw,self.R.CalData[module]['Pedestal'])
-            if display:
-                cd  = self.R.addChanDesc(raw,module)
-                ipt = []
-                for x in cd: ipt.append(pretitle+x)
-                h = self.R.displayWFD(WFDps,ipt=ipt)
-                self.WFHists.extend(h)
-
-
-
+        WFD = self.R.assocWFD(raw,pedsub=True)
+        cd = sorted(WFD.keys())
+        prenames = ['ped','npulse','nsubp','area','time']
+        debug = 0
+        if evtnum%100==3: debug = 1
+        for x in cd:
+            ped,iPulse,subPperP,pArea,pTime = self.W.pulseAnal(WFD[x],x,debug=debug)
+            V = [ped,iPulse,subPperP,pArea,pTime]
+            y = float(cd.index(x))
+            for tl in TL:
+                for i,pren in enumerate(prenames):
+                    name = pren+'_vs_WFD_'+tl
+                    #print 'i,pren,V[i]',i,pren,V[i]
+                    if pren=='ped':
+                        self.Hists[name].Fill(V[i],y)
+                    elif pren=='npulse':
+                        self.Hists[name].Fill(float(len(V[i])),y)
+                    else:
+                        for v in V[i]:
+                            self.Hists[name].Fill(float(v),y)
         return
     def analTDC(self,raw):
         '''
