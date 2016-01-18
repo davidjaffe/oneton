@@ -6,6 +6,7 @@ process 1ton data
 import h5py
 import numpy
 import graphUtils
+import ROOT
 from ROOT import TFile,TH1D,TH2D,gDirectory
 import sys
 import datetime
@@ -228,8 +229,8 @@ class process():
                         nx,xma = 1000,100.
                         xmi = xma - float(nx)
                     if pren=='ped':
-                        nx,xmi = 100,1900.
-                        xma = xmi + 2*float(nx)
+                        nx,xmi = 200,1950.
+                        xma = xmi + 0.25*float(nx)
                     if pren=='npulse' or pren=='nsubp':
                         nx,xmi = 11,-0.5
                         xma = xmi + float(nx)
@@ -246,7 +247,7 @@ class process():
         '''
         loop over events in order of increasing event number
         '''
-        dumpOn,dumpThres = True,0.9999
+        dumpOn,dumpThres = True,0.9
         
         CalData = self.R.getCalData()
         EvtDir  = self.R.getEvtDir()
@@ -329,6 +330,7 @@ class process():
         XMA= XMI+float(NX)
             
         H,HR = [],[]
+        self.hWFD,self.hrWFD = {},{}
         for cd in channels:
             w = ''
             if channels.index(cd)==0: w = c
@@ -341,11 +343,11 @@ class process():
                 w += ' TDC {0:.2f} '.format( TDCcd[cd][1] )
             else:
                 w += ' noTDC '
-            h = self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w)
+            self.hWFD[cd] = h = self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w)
             H.append(h)
-            hr= self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w+' Z',NX=NX,XMI=XMI,XMA=XMA)
+            self.hrWFD[cd] = hr= self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w+' Z',NX=NX,XMI=XMI,XMA=XMA)
             HR.append(hr)
-            
+
         # increase size of x,y labels
         for h,hr in zip(H,HR):
             for a in ["x","y"]:
@@ -354,6 +356,9 @@ class process():
                 s = hr.GetLabelSize(a)
                 hr.SetLabelSize(2.*s,a)
         s = 'run'+str(self.R.getRunDetail('run'))+'evt'+str(evtnum)
+
+        self.diagnoseWFD(fname=s,figdir=self.WFfigdir)
+
         self.gU.drawMultiHists(H,fname=s,figdir=self.WFfigdir,statOpt=0,dopt='Hist')
         for h in H: h.Delete()
 
@@ -362,6 +367,66 @@ class process():
         for hr in HR: hr.Delete()
         
                     
+        return
+    def diagnoseWFD(self,fname='diagnoseWFD',figdir=''):
+        '''
+        overlay histograms of waveforms with results of wfanal
+        '''
+        md = sorted(self.hWFD.keys())
+        for i,DICT in enumerate([self.hWFD,self.hrWFD]):
+            # arcane bullshit to draw lines...???
+            lines = {}
+            for icd,cd in enumerate(md):
+
+                V = self.aWFD[cd] #### [ped,iPulse,subPperP,pArea,pTime]
+                h = DICT[cd]
+                ymi,yma = h.GetMinimum(),h.GetMaximum()
+                xmi,xma = h.GetXaxis().GetXmin(),h.GetXaxis().GetXmax()
+                h.SetStats(0)
+                ped = V[0]
+                L =  ROOT.TLine(xmi,ped,xma,ped)
+                L.SetLineColor(ROOT.kGreen)
+                lines[cd] = [ L ]
+                iPulse = V[1]
+                for pair in iPulse:
+                    for ib in pair:
+                        L = ROOT.TLine(float(ib),ymi,float(ib),yma)
+                        L.SetLineColor(ROOT.kBlue)
+                        L.SetLineStyle(3) # dotted
+                        lines[cd].append( L )
+                pTime = V[4]
+                for t in pTime:
+                    L = ROOT.TLine(t,ymi,t,yma)
+                    L.SetLineColor(ROOT.kRed)
+                    L.SetLineStyle(2) # dashed
+                    lines[cd].append( L )
+
+            pdf = fname + '_'+str(i) 
+            if figdir!='': pdf = figdir + pdf
+            ps = pdf + '.ps'
+            pdf= pdf + '.pdf'
+            ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # no pop up
+            xsize,ysize = 1100,850 # landscape style
+            canvas = ROOT.TCanvas(pdf,fname,xsize,ysize)
+            canvas.Divide(2,4)
+            for icd,cd in enumerate(md):
+                canvas.cd(icd+1)
+                h = DICT[cd]
+                h.SetStats(0)
+                h.Draw("hist")
+                for L in lines[cd]:
+                    L.Draw()
+                    canvas.Modified() # this one?
+                    canvas.Update() # is this needed?
+                    #print L.Print()
+            if 0:
+                canvas.cd()
+                canvas.Update()
+                canvas.Modified()    
+                canvas.Print(ps,'Landscape')
+                os.system('ps2pdf ' + ps + ' ' + pdf)
+                if os.path.exists(pdf): os.system('rm ' + ps)
+            self.gU.finishDraw(canvas,ps,pdf,ctitle=fname)
         return
     def AinB(self,A,B):
         for a in B:
@@ -420,10 +485,11 @@ class process():
         cd = sorted(WFD.keys())
         prenames = ['ped','npulse','nsubp','area','time']
         debug = 0
-        if evtnum%100==3: debug = 1
+        #if evtnum%100==3: debug = 1
+        self.aWFD = {}
         for x in cd:
             ped,iPulse,subPperP,pArea,pTime = self.W.pulseAnal(WFD[x],x,debug=debug)
-            V = [ped,iPulse,subPperP,pArea,pTime]
+            self.aWFD[x] = V = [ped,iPulse,subPperP,pArea,pTime]
             y = float(cd.index(x))
             for tl in TL:
                 for i,pren in enumerate(prenames):
@@ -519,9 +585,8 @@ if __name__ == '__main__' :
             "/Users/djaffe/work/1TonData/Filled_151217/run600.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
-    Special_fnlist = ['/Users/djaffe/work/1TonData/Filled_151217/run588.h5'] # problem with this file?
         
-    if nevt<big: fnlist = [fnlist[0]] # debug with one file
+    if nevt<big: fnlist = [fnlist[7]] # debug with one file
 
     # create name of output root file
     f = sorted(fnlist)
