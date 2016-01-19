@@ -44,6 +44,7 @@ class reader():
         print 'reader.start run. File',fn
         
         self.RunInfo = self.f['Run_Info']
+        self.RunNumber = self.getRunDetail('run')
         if 'Calibration' in self.f:
             self.CalData = self.f['Calibration']
         else:
@@ -313,10 +314,28 @@ class reader():
         d = {}
         data = raw
         if ped is not None:
+            if 493<self.RunNumber and self.RunNumber<751 :
+                ped = self.fixPed(ped)
             data = numpy.subtract(raw,ped)
         for i,x in enumerate(data):
             d[i] = numpy.array(x)
         return d
+    def fixPed(self,ped):
+        '''
+        Lindsey email of 19jan2016:
+        OK, I've now fixed this bug.
+    It was caused by overflowing an undersized variable.
+    I got the error because I changed the number of averaged waveforms from 10 to 100.
+    It is pretty easy to recover the true pedestal data from the values that were written:
+    Pedestal_true = ((Pedestal_written)x100 + (3x65536 - 1))/100
+    The pedestal data from run 751 onwards will not require that correction.
+        '''
+        offset = float((3*65536 - 1))
+        q = numpy.multiply(ped,100.)
+        r = numpy.add(q,offset)
+        s = numpy.divide(r,100.)
+        return s
+        
     def assocTDC(self,raw,mode=None):
         '''
         input is a single event

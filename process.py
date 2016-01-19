@@ -72,6 +72,11 @@ class process():
     def finish(self,rfn='oneton.root'):
         '''
         execute at end of job
+        Print summary output
+        Open and fill ROOT file
+        Draw some hists
+        Delete all hists/trees in memory
+        Print job timing stats
         '''
         self.R.summary()
         rf = TFile(rfn,"RECREATE")
@@ -81,8 +86,6 @@ class process():
         for h in self.WFHists: rf.WriteTObject(h)
         nwrite += len(self.WFHists)
         rf.Close()
-
-
 
         # draw selected hists
         srun = self.getFilePrefix(rfn)
@@ -95,12 +98,12 @@ class process():
             if len(s)>0:
                 s.sort()
                 self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
-
         
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()
         print 'process.finish Wrote',nwrite,'objects to',rfn,'and deleted them from memory'
 
+        # how long did this job take?
         endtime = datetime.datetime.now()
         print 'process.finish Job end time',endtime.strftime('%Y/%m/%d %H:%M:%S')
         elapsed = endtime-self.start_time
@@ -110,8 +113,6 @@ class process():
         sc= s - 60.*60.*h - 60.*m
         dt = str(h)+'h'+str(m)+'m'+str(sc)
         print 'process.finish Job duration(s)',s,'or',dt
-
-        
         return
     def bookHists(self,kind):
         '''
@@ -221,7 +222,7 @@ class process():
                 ny = len(md)
                 ymi = -0.5
                 yma = ymi + float(ny)
-                for pren in ['time','area','ped','npulse','nsubp']:
+                for pren in ['time','area','ped','pedsd','npulse','nsubp']:
                     name = pren + '_vs_WFD_' + tl
                     nx,xmi = 4096,-0.5
                     xma = xmi + float(nx)
@@ -231,6 +232,9 @@ class process():
                     if pren=='ped':
                         nx,xmi = 200,1950.
                         xma = xmi + 0.25*float(nx)
+                    if pren=='pedsd':
+                        nx,xmi = 50,-0.5
+                        xma = xmi + float(nx)/5.
                     if pren=='npulse' or pren=='nsubp':
                         nx,xmi = 11,-0.5
                         xma = xmi + float(nx)
@@ -243,15 +247,17 @@ class process():
         else:
             print 'process.bookHists Invalid input',kind
         return
-    def eventLoop(self,maxEvt=99999999,dumpAll=False):
+    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999):
         '''
         loop over events in order of increasing event number
         '''
-        dumpOn,dumpThres = True,0.9
+        dumpOn = dumpThres>0 
         
         CalData = self.R.getCalData()
         EvtDir  = self.R.getEvtDir()
 
+        self.dumpCalib()
+        
         sEvtKeys = sorted(EvtDir.keys(),key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
             Event = EvtDir[evtkey]
@@ -273,6 +279,30 @@ class process():
             if dumpEvt:
                 self.dumpEvent(Event,evtnum)
                 if not dumpAll: self.evtDisplay(Event,evtnum)
+        return
+    def dumpCalib(self):
+        '''
+        dump calibration data
+        '''
+        CalData = self.R.getCalData()
+        if CalData is None:
+            print '=====> NO CALIBRATION DATA <==========='
+            return
+        print '+++++++++++++ dump Calibration data +++++++++'            
+        for x in CalData:
+            print x, # Digitizer_1,Digitizer_2
+            for y in CalData[x]: # Address, Pedestal
+                print y,
+                g = CalData[x][y][()]
+                if y=='Address':
+                    print g
+                elif y=='Pedestal':
+                    for i in range(4):
+                        print "Chan",i,g[i,:]
+                else:
+                    print 'Unexpected value ......'
+                    
+        print '++++++++++++++ end Calibration data dump ++++'
         return
     def dumpEvent(self,raw,evtnum):
         triggers = self.R.unpackTrigger(raw['TDC'])
@@ -307,6 +337,7 @@ class process():
             print ''
         print '---------------- end dump event#',evtnum
         return
+
     def evtDisplay(self,raw,evtnum):
         '''
         concoct event display
@@ -387,14 +418,21 @@ class process():
                 L =  ROOT.TLine(xmi,ped,xma,ped)
                 L.SetLineColor(ROOT.kGreen)
                 lines[cd] = [ L ]
-                iPulse = V[1]
+                pedsd = V[1]
+                for x in [-1.,1.]:
+                    y = ped+x*pedsd
+                    L = ROOT.TLine(xmi,y,xma,y)
+                    L.SetLineColor(ROOT.kGreen)
+                    L.SetLineStyle(3)
+                    lines[cd].append( L )
+                iPulse = V[2]
                 for pair in iPulse:
                     for ib in pair:
                         L = ROOT.TLine(float(ib),ymi,float(ib),yma)
                         L.SetLineColor(ROOT.kBlue)
                         L.SetLineStyle(3) # dotted
                         lines[cd].append( L )
-                pTime = V[4]
+                pTime = V[5]
                 for t in pTime:
                     L = ROOT.TLine(t,ymi,t,yma)
                     L.SetLineColor(ROOT.kRed)
@@ -454,7 +492,10 @@ class process():
             i = md.index(x)
             for y in QDC[x]:
                 #print 'process.analQDC x,QDC[x],y:',x,QDC[x],y
-                ch,v,hilo,ovfl = y # chan#, value, hirange or lowrange, overflow
+                if len(y)==3: # early data
+                    ch,v,hilo = y
+                else:
+                    ch,v,hilo,ovfl = y # chan#, value, hirange or lowrange, overflow
                 for tl in TL:
                     name = tl+'_QDC'+rng[hilo]+'_'+x
                     self.Hists[name].Fill(v)
@@ -483,19 +524,19 @@ class process():
         pretitle = 'r'+str(runnum)+'e'+str(evtnum)
         WFD = self.R.assocWFD(raw,pedsub=True)
         cd = sorted(WFD.keys())
-        prenames = ['ped','npulse','nsubp','area','time']
+        prenames = ['ped','pedsd','npulse','nsubp','area','time']
         debug = 0
         #if evtnum%100==3: debug = 1
         self.aWFD = {}
         for x in cd:
-            ped,iPulse,subPperP,pArea,pTime = self.W.pulseAnal(WFD[x],x,debug=debug)
-            self.aWFD[x] = V = [ped,iPulse,subPperP,pArea,pTime]
+            ped,pedsd,iPulse,subPperP,pArea,pTime = self.W.pulseAnal(WFD[x],x,debug=debug)
+            self.aWFD[x] = V = [ped,pedsd,iPulse,subPperP,pArea,pTime]
             y = float(cd.index(x))
             for tl in TL:
                 for i,pren in enumerate(prenames):
                     name = pren+'_vs_WFD_'+tl
                     #print 'i,pren,V[i]',i,pren,V[i]
-                    if pren=='ped':
+                    if pren=='ped' or pren=='pedsd':
                         self.Hists[name].Fill(V[i],y)
                     elif pren=='npulse':
                         self.Hists[name].Fill(float(len(V[i])),y)
@@ -559,14 +600,43 @@ class process():
         '''
         f = fn.split('/')[-1]
         return f.split('.')[0]
+    def getRawDataList(self,rawDataDir):
+        '''
+        return list of full path name of files in rawDataDir
+        cribbed from http://stackoverflow.com/questions/3207219/how-to-list-all-files-of-a-directory-in-python
+        '''
+        onlyfiles = [os.path.join(rawDataDir,f) for f in os.listdir(rawDataDir) if os.path.isfile(os.path.join(rawDataDir, f))]
+        return onlyfiles
+    def seeCalibData(self,rawDataDir):
+        '''
+        dump calib data for all runs in rawDataDir
+        '''
+        onlyfiles = self.getRawDataList(rawDataDir)
+        for fn in onlyfiles:
+            self.R.start(fn=fn)
+            self.dumpCalib()
+            self.R.closeHDF5File()
+        return
 
 if __name__ == '__main__' :
     nevt = big = 9999999999
+    runstring = None
+    dumpThres = -1.
     dumpAll = False
     if len(sys.argv)>1: nevt = int(sys.argv[1])
-    if len(sys.argv)>2: dumpAll = True
+    if len(sys.argv)>2: runstring = str(sys.argv[2])
+    if len(sys.argv)>3: dumpThres = float(sys.argv[3])
+    if len(sys.argv)>4: dumpAll = True
     P = process()
+    
 
+    rawDataDir = "/Users/djaffe/work/1TonData/Filled_151217/"
+    ######## enable to dump calib data for all files in rawDataDir
+    if 0: 
+        P.seeCalibData(rawDataDir)
+        sys.exit('End of calibration data dump')
+
+    
     fnlist = ["/Users/djaffe/work/1TonData/Filled_151217/run585.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run586.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run587.h5",
@@ -585,8 +655,22 @@ if __name__ == '__main__' :
             "/Users/djaffe/work/1TonData/Filled_151217/run600.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
+
+    if runstring is not None:
+        newlist = []
+        for fn in fnlist:
+            if runstring in fn: newlist.append(fn)
+        if len(newlist)==0:
+            # look for file in rawDataDir
+            flist = P.getRawDataList(rawDataDir)
+            for fn in flist:
+                if runstring in fn: newlist.append(fn)
+        if len(newlist)==0:
+            sys.exit( 'ERROR Input runstring '+runstring+'yields zero matches')
+            
+        fnlist = newlist
         
-    if nevt<big: fnlist = [fnlist[7]] # debug with one file
+    if nevt<big and runstring is None: fnlist = [fnlist[7]] # debug with one file
 
     # create name of output root file
     f = sorted(fnlist)

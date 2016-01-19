@@ -17,7 +17,8 @@ class wfanal():
     def pulseAnal(self,v,detel,pedsub=True,debug=0):
         '''
         main routine
-        return (flat) pedestal estimate, # of pulses, # of sub-pulses in each pulse,
+        return (flat) pedestal estimate, std.dev. of pedestal estimate,
+         # of pulses, # of sub-pulses in each pulse,
         estimated area of each pulse and estimated time of each pulse
         '''
 
@@ -63,7 +64,7 @@ class wfanal():
                     t = pTime[i]
                     print 'Pulse# {0:} a {1:.2f} t {2:.2f}'.format(i,a,t),
                 print ''
-        return ped,iPulse,subPperP,pArea,pTime
+        return ped,pedsd,iPulse,subPperP,pArea,pTime
     def calcATB(self,v,iPulse,ipre=3,ipost=3,hFrac=0.3):
         '''
         return Area and Time for input pulses defined by iPulse, ipre,ipost in
