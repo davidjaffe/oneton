@@ -348,7 +348,7 @@ class graphUtils():
             if os.path.exists(pdf): os.system('rm ' + ps)
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
-        return
+        return canvas
     def makeTMultiGraph(self,name,tit=None):
         title = tit
         if tit is None:title = name.replace('_',' ')

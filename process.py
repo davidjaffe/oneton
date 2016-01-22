@@ -13,7 +13,7 @@ import datetime
 import reader
 import math
 import os
-import Logger
+#import Logger
 import wfanal
 
 class process():
@@ -44,13 +44,14 @@ class process():
                pass
             else:
                 try:
-                    os.mkdir(d)
+                    print("Skipping mkdir")
+                    #os.mkdir(d)
                 except IOError,e:
                     print 'process__init__',e
                 else:
                     print 'process__init__ created',d
         lfn = self.logdir + cnow + '.log'
-        sys.stdout = Logger.Logger(fn=lfn)
+        #sys.stdout = Logger.Logger(fn=lfn)
         print 'process__init__ Output directed to terminal and',lfn
         print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
         

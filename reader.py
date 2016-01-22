@@ -9,6 +9,7 @@ import graphUtils
 from ROOT import TFile
 import sys
 import datetime
+import zipfile
 
 
 
@@ -36,6 +37,13 @@ class reader():
         self.gU = graphUtils.graphUtils()
         print 'reader: initialized'
         return
+    def unzip(self,fname=None):
+        '''Unzip the data file and return the data file.
+        
+        The unzipped file is placed in the python working directory'''
+        thezip = zipfile.ZipFile(fname)
+        thezip.extractall()
+        return fname.split('\\')[-1].replace('.zip', '.h5')
     def start(self,fn=None):
         '''
         start of run initialization
@@ -429,4 +437,4 @@ if __name__ == '__main__' :
     #r = reader()
     #fn = '/Users/djaffe/work/1TonData/run462.h5'
     #r.first(fn=fn)
-    print("You can't directly call this!")
+    print("directly calling data file reader object")
