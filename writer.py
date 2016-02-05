@@ -39,7 +39,7 @@ class writer():
         self.r = self.f.create_group('Run/'+rnm)
         self.EventNum = None
         return
-    def writeEvent(self,data,datalabel,evtNo=None):
+    def writeEvent(self,datalabel,data,evtNo=None):
         '''
         write array of data to hdf5 event group
         can be called multiple times for same event
@@ -59,27 +59,70 @@ class writer():
         Elab = 'Event/'+enm+'/'
         for l,d in zip(datalabel,data):
             self.r.create_dataset(Elab+l,data=d)
+            
         return eN
-    def printname(self,name):
-        print name
+    def writeData(self,label,data):
+        '''
+        add data to output with path given by label.
+        data and label should be equal length lists
+        '''
+        for l,d in zip(label,data):
+            self.f.create_dataset(l,data=d)
+            print 'writer.writeData label',l,'data',d
         return
-    def testrd(self,fn):
-        self.f = f = h5py.File(fn,'r')
+
+    def find(self,name):
+        if name is not None: self.Found.append(name)
+        return None
+    def uniqify(self,L):
+        '''
+        return list with only unique strings
+        example: L = ['a','aa','ab','abc'] => ['aa','abc']
+        '''
+        more = True
+        K = L
+        while more:
+            more = False
+            takeOut = []
+            for i,a in enumerate(K):
+                for b in K[i+1:]:
+                    if a in b:
+                        takeOut.append(a)
+                        break 
+            for b in takeOut:
+                more = True
+                i = K.index(b)
+                del( K[i] )
+        return K
+    def show(self,fn,group=None):
+        '''
+        print content of uniqified elements of group in hdf5 file named fn
+        depends on writer.find, write.uniqify
+        '''
+        f = h5py.File(fn,'r')
+        self.Found = []
+        if group is None:
+            f.visit(self.find)
+        elif group in f:
+            f[group].visit(self.find)
+            self.Found = ['{1}/{0}'.format(a,group) for a in self.Found]
+
+        #print 'BEFORE self.Found',self.Found
+        self.Found = self.uniqify(self.Found)
+        #print 'AFTER self.Found',self.Found
         
-        print 'testing',fn
-        for a in f:
+        print '\nwrite.show group',group,'in file',fn
+        if len(self.Found)==0:print 'write.show Nothing found for group',group
+        for a in self.Found:
             print a,
-            for b in f[a]:
-                print b,
-                for c in f[a][b]:
-                    print c,
-                    for d in f[a][b][c]:
-                        print d,
-                        for e in f[a][b][c][d]:
-                            print e,f[a][b][c][d][e][()],
-                print ''
+            if f[a].shape==():
+                print f[a][()],
+            else:
+                for b in f[a]: print b,
+            print ''
         f.close()
         return
+
 if __name__ == '__main__' :
     w = writer()
     fn = 'bugshdf5.h5'
@@ -93,14 +136,22 @@ if __name__ == '__main__' :
             faketime = float(ev)+random.random()+0.5
             faketemp = random.gauss(float(ev),1.)
             data = [faketime, faketemp]
-            evtn = w.writeEvent(data,datalabel)
+            evtn = w.writeEvent(datalabel, data)
             q = []
             for i in range(3): q.append(float(ev+1)*random.random())
             data = [ numpy.array(q) ]
-            evtn = w.writeEvent(data,dl2,evtNo=evtn)
-            
+            evtn = w.writeEvent(dl2,data,evtNo=evtn)
+
+    datalabel = ['/Calibration/TDC', '/Calibration/ADC']
+    data = [ numpy.array([random.random() for x in range(3)]), numpy.array([random.gauss(0.,.1) for x in range(3)]) ]
+    w.writeData(datalabel,data)
+    
     w.closeFile()
-    w.testrd(fn)
+
+    w.show(fn)
+    w.show(fn,'/Run/000387')
+    w.show(fn,'/Run/000222')
+    w.show(fn,'/Calibration')
         
         
             
