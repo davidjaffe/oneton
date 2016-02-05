@@ -9,7 +9,7 @@ import graphUtils
 from ROOT import TFile
 import sys
 import datetime
-
+import os,zipfile
 
 
 class reader():
@@ -39,8 +39,29 @@ class reader():
     def start(self,fn=None):
         '''
         start of run initialization
+        handle zip files using zipfile:
+        identify as zipfile, check if namelist in zipped files agrees with expected name,
+        then extract .h5 file. keep track of name of extracted file so file can be deleted
+        after use
         '''
-        self.f = h5py.File(fn,'r')
+        bn = os.path.basename(fn)
+        bnsuf = bn.split('.')[-1]
+        if bnsuf=='zip':
+            print 'reader.start open,extract',fn
+            zf = zipfile.ZipFile(fn)
+            namel = zf.namelist()
+            bnpre = bn.split('.')[0]
+            if namel[0]!=bnpre+'.h5': # should not happen
+                sys.exit('reader.start ERROR processing ' + fn + ' because namelist ' + namelist[0] + ' does not match prefix ' + bnpre)
+            h5f = zf.extract(namel[0])
+            self.localHDF5file = namel[0]
+            self.f = h5py.File(h5f,'r')
+        elif bnsuf=='h5':
+            self.f = h5py.File(fn,'r')
+            self.localHDF5file = None
+        else:
+            sys.exit('reader.start ERROR processing ' + fn +  ' UNKNOWN suffix ' + bnsuf)
+            
         print 'reader.start run. File',fn
         
         self.RunInfo = self.f['Run_Info']
@@ -56,10 +77,16 @@ class reader():
     def closeHDF5File(self):
         '''
         close the current HDF5
+        check to see if a local file hdf5 was made by unzipping
         '''
         name = self.f.filename
         self.f.close()
-        print 'reader.closeHDF5File closed',name
+        words = 'reader.closeHDF5File closed ' + name
+        if self.localHDF5file is not None:
+            if os.path.isfile(self.localHDF5file):
+                os.remove(self.localHDF5file)
+                words += ' and deleted it'
+        print words
         return
     def summary(self):
         '''
@@ -411,6 +438,10 @@ class reader():
         # exclude OR of all triggers
         trigs.remove(self.triggerOR[0])
         return trigs
+    def unpackTemperature(self,raw):
+        return raw['Event_Temp'][()]
+    def unpackTime(self,raw):
+        return raw['Event_Time'][()]
     def printDataset(self,X):
         '''
         avoid annoying "TypeError: Can't iterate over a scalar dataset"

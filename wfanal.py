@@ -116,6 +116,7 @@ class wfanal():
                 while i>i0 and Y[i-i0]<fthres:
                     #print 'i',i,'Y[i-i0]',Y[i-i0],'fthres',fthres
                     i = i - 1
+                ##print 'wfanal.calcATB i,i0',i,i0
                 U = numpy.array(X[i-i0:i+2-i0])
                 V = numpy.array(Y[i-i0:i+2-i0])
                 s,yI = self.fitLine(U,V)
@@ -126,13 +127,23 @@ class wfanal():
         '''
         least squares solution for line with points X,Y
         '''
-        sy = sum(Y)
-        syy= sum(Y*Y)
-        sx = sum(X)
-        sxy= sum(X*Y)
         N  = float(len(X))
-        m = (sy/N - syy/sy)/(sx/N -sxy/sy)
-        b = (sy-m*sx)/N
+        ##print 'wfanal.fitLine:X',X,'Y',Y
+        m,b = 0.,0.
+        if N==0.:
+            print 'wfanal.fitLine: ERROR zero length input array X=',X,'Y=',Y
+        else:
+            sy = sum(Y)
+            syy= sum(Y*Y)
+            sx = sum(X)
+            sxy= sum(X*Y)
+            if sy==0.:
+                sxx = sum(X*X)
+                b = (sy/sx - sxy/sxx) / (N/sx - sx/sxx)
+                m = (sy - b*N)/sx
+            else:
+                m = (sy/N - syy/sy)/(sx/N -sxy/sy)
+                b = (sy-m*sx)/N
         return m,b
     def getPed(self,v,top=100):
         '''

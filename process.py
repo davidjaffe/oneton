@@ -15,17 +15,23 @@ import math
 import os
 import Logger
 import wfanal
+import calibThermocouple
 
 class process():
     def __init__(self):
         self.R = reader.reader()
         self.W = wfanal.wfanal()
+        self.cT = calibThermocouple.calibThermocouple()
         self.gU= graphUtils.graphUtils()
+        
         self.Hists = {}
         self.TDChistnames = {}
         self.refTDCs = ['S2','H0']
         self.WFHists = []
 
+        self.Times = []
+        self.rawTemps = []
+        self.calTemps = []
 
 
         now = datetime.datetime.now()
@@ -69,6 +75,23 @@ class process():
     def endRun(self):
         self.R.closeHDF5File()
         return
+    def makeTvTgraphs(self):
+        '''
+        make graphs of raw and calib temperature vs time
+        '''
+        X = self.Times
+        Y = self.rawTemps
+        title = 'raw temp vs time'
+        name = title.replace(' ','_')
+        graw = self.gU.makeTGraph(X,Y,title,name)
+        Y = self.calTemps
+        title = 'calib temp vs time'
+        name = title.replace(' ','_')
+        gcal = self.gU.makeTGraph(X,Y,title,name)
+        tmg = self.gU.makeTMultiGraph('temp_vs_time')
+        tmg.Add(graw)
+        tmg.Add(gcal)
+        return [gcal,graw,tmg]
     def finish(self,rfn='oneton.root'):
         '''
         execute at end of job
@@ -79,12 +102,16 @@ class process():
         Print job timing stats
         '''
         self.R.summary()
+        tvtgraphs  = self.makeTvTgraphs()
+        tvtmg = tvtgraphs[-1]
         rf = TFile(rfn,"RECREATE")
         nwrite = 0
         for h in self.Hists: rf.WriteTObject(self.Hists[h])
         nwrite += len(self.Hists)
         for h in self.WFHists: rf.WriteTObject(h)
         nwrite += len(self.WFHists)
+        for g in tvtgraphs: rf.WriteTObject(g)
+        nwrite += len(tvtgraphs)
         rf.Close()
 
         # draw selected hists
@@ -98,7 +125,16 @@ class process():
             if len(s)>0:
                 s.sort()
                 self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
-        
+
+        # draw temp vs time
+        for g in tvtgraphs[0:-1]:
+            self.gU.fixTimeDisplay(g,showDate=True)
+            self.gU.color(g,2,2)
+            self.gU.drawGraph(g,figDir=self.figdir)
+
+        self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
+
+                
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()
         print 'process.finish Wrote',nwrite,'objects to',rfn,'and deleted them from memory'
@@ -184,7 +220,7 @@ class process():
         if kind=='QDC':
             OK = True
             md = self.R.getModuleData('QDC','ChanDesc')
-            clean = False
+            clean = 'N/C' not in md
             while not clean:
                 md.remove('N/C')
                 clean = 'N/C' not in md
@@ -247,16 +283,16 @@ class process():
         else:
             print 'process.bookHists Invalid input',kind
         return
-    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999):
+    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,timeTempOnly=True):
         '''
         loop over events in order of increasing event number
         '''
-        dumpOn = dumpThres>0 
+        dumpOn = dumpThres>0 and not timeTempOnly
         
         CalData = self.R.getCalData()
         EvtDir  = self.R.getEvtDir()
 
-        self.dumpCalib()
+        if dumpAll: self.dumpCalib()
         
         sEvtKeys = sorted(EvtDir.keys(),key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
@@ -271,15 +307,30 @@ class process():
             
             missing = self.R.unpackEvent(Event)
             if len(missing)==0: # OK
-                triggers = self.R.unpackTrigger(Event['TDC'])
-                self.analTDC(Event['TDC'])
-                self.analQDC(Event,evtnum)
-                self.analWFD(Event,evtnum)
+                self.analTvT(Event,evtnum)
+
+                if not timeTempOnly:
+                    triggers = self.R.unpackTrigger(Event['TDC'])
+                    self.analTDC(Event['TDC'])
+                    self.analQDC(Event,evtnum)
+                    self.analWFD(Event,evtnum)
+
                 
             if dumpEvt:
                 self.dumpEvent(Event,evtnum)
                 if not dumpAll: self.evtDisplay(Event,evtnum)
         return
+    def analTvT(self,raw,evtnum):
+        '''
+        analysis time, temperature data
+        '''
+        ti = self.R.unpackTime(raw)
+        rawtemp = self.R.unpackTemperature(raw)
+        caltemp = self.cT.getCalibTC(rawtemp)
+        self.Times.append(ti)
+        self.rawTemps.append(rawtemp)
+        self.calTemps.append(caltemp)
+        return 
     def dumpCalib(self):
         '''
         dump calibration data
@@ -623,10 +674,10 @@ if __name__ == '__main__' :
     runstring = None
     dumpThres = -1.
     dumpAll = False
-    if len(sys.argv)>1: nevt = int(sys.argv[1])
-    if len(sys.argv)>2: runstring = str(sys.argv[2])
-    if len(sys.argv)>3: dumpThres = float(sys.argv[3])
-    if len(sys.argv)>4: dumpAll = True
+    if len(sys.argv)>1: nevt = int(sys.argv[1])           # 1st arg = # of events
+    if len(sys.argv)>2: runstring = str(sys.argv[2])      # 2d arg = None = use default file list, = ALL = use all files in dir, = somestring = all files containing somestring in name
+    if len(sys.argv)>3: dumpThres = float(sys.argv[3])    # 3d arg = r in [0,1.]  = if random>r then dump
+    if len(sys.argv)>4: dumpAll = True                    # any 4th arg, dump every event
     P = process()
     
 
@@ -656,17 +707,22 @@ if __name__ == '__main__' :
             "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
             "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
 
-    if runstring is not None:
+    if runstring is not None :
         newlist = []
-        for fn in fnlist:
-            if runstring in fn: newlist.append(fn)
-        if len(newlist)==0:
-            # look for file in rawDataDir
-            flist = P.getRawDataList(rawDataDir)
-            for fn in flist:
+        if runstring.lower()=='all':
+            newlist = P.getRawDataList(rawDataDir)
+        else:
+            for fn in fnlist:
                 if runstring in fn: newlist.append(fn)
+            if len(newlist)==0:
+                # look for file in rawDataDir
+                flist = P.getRawDataList(rawDataDir)
+                for fn in flist:
+                    if runstring in fn: newlist.append(fn)
         if len(newlist)==0:
             sys.exit( 'ERROR Input runstring '+runstring+'yields zero matches')
+        else:
+            print 'file name list contains',len(newlist),'entries. First,last=',newlist[0],newlist[-1]
             
         fnlist = newlist
         
