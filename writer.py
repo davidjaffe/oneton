@@ -31,6 +31,7 @@ class writer():
         open hdf5 file for writing
         '''
         self.f = h5py.File(fn,'w')
+        print 'writer.openFile opened',self.f.filename
         return
     def closeFile(self):
         '''
@@ -68,7 +69,12 @@ class writer():
         enm = str(eN).zfill(6)
         #E = self.r.create_group('Event/'+enm)
         Elab = 'Event/'+enm+'/'
-        for l,d in zip(datalabel,data):
+        if type(datalabel) is list:
+            DL,D = datalabel,data
+        else:
+            DL,D = [datalabel],[data]
+        for l,d in zip(DL,D):
+            #print 'writer.writeEvent Elab+l,d',Elab+l,d
             self.r.create_dataset(Elab+l,data=d)
             
         return eN

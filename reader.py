@@ -279,10 +279,12 @@ class reader():
                 CD.append( names[i] )
         elif module in self.QDCNames:
             names = self.getModuleData('QDC',s)
+            #print 'reader.addChanDesc:names',names,'module',module,'Unpack',Unpack
             i0 = 0
             if '2' in module: i0 = 8
             for b in Unpack:
-                i = i0 + int(b[0])
+                i = i0 + int(b[0]) 
+                #print 'reader.addChanDesc:b,i0,i',b,i0,i
                 CD.append( names[i] )
         elif module in self.WFDNames:
             names = self.getModuleData('Digitizer',s)

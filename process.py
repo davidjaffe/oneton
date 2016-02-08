@@ -17,6 +17,7 @@ import Logger
 import wfanal
 import calibThermocouple
 import writer
+from optparse import OptionParser
 
 class process():
     def __init__(self):
@@ -25,6 +26,9 @@ class process():
         self.writer = writer.writer()
         self.cT = calibThermocouple.calibThermocouple()
         self.gU= graphUtils.graphUtils()
+
+        self.writeRecon = None
+        self.overlaps = 0
         
         self.Hists = {}
         self.TDChistnames = {}
@@ -61,7 +65,8 @@ class process():
         sys.stdout = Logger.Logger(fn=lfn)
         print 'process__init__ Output directed to terminal and',lfn
         print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
-        
+
+       
         return
     def start(self):
         self.bookHists('TDC')
@@ -73,9 +78,16 @@ class process():
         self.R.start(fn=file)
         self.R.reportRunDetail()
         if tG: self.R.testGet()
+        if self.writeRecon:
+            runnum = self.R.getRunDetail('run')
+            self.writer.setRunNum(runnum)
+
         return
     def endRun(self):
         self.R.closeHDF5File()
+        if self.overlaps>0:
+            print 'process.endRun recorded',self.overlaps,'overlaps of lo,hi range of an ADC channel'
+        self.overlaps = 0
         return
     def makeTvTgraphs(self):
         '''
@@ -98,12 +110,17 @@ class process():
         '''
         execute at end of job
         Print summary output
+        close hdf5 output file, if necessary
         Open and fill ROOT file
         Draw some hists
         Delete all hists/trees in memory
         Print job timing stats
         '''
         self.R.summary()
+        if self.writeRecon: self.writer.closeFile()
+
+
+        
         tvtgraphs  = self.makeTvTgraphs()
         tvtmg = tvtgraphs[-1]
         rf = TFile(rfn,"RECREATE")
@@ -151,7 +168,11 @@ class process():
         sc= s - 60.*60.*h - 60.*m
         dt = str(h)+'h'+str(m)+'m'+str(sc)
         print 'process.finish Job duration(s)',s,'or',dt
-        return
+
+
+        #self.writer.show(reconfn, group='/Run/000600/Event/000010/WFD')
+
+        return True
     def bookHists(self,kind):
         '''
         book hists based on kind of data
@@ -309,7 +330,12 @@ class process():
 
             dumpEvt = dumpAll or \
                 (dumpOn and ( (int(evtnum)%10000==1 and dumpFirstEventOfEachRun) or numpy.random.uniform()>dumpThres))
-            
+
+            if dumpEvt:
+                self.dumpEvent(Event,evtnum)
+                if not dumpAll: self.evtDisplay(Event,evtnum)
+
+                            
             missing = self.R.unpackEvent(Event)
             if len(missing)==0: # OK
                 self.analTvT(Event,evtnum)
@@ -326,10 +352,44 @@ class process():
                         self.evtDisplay(Event,evtnum)
                         self.dumpEvent(Event,evtnum)
                 
-            if dumpEvt:
-                self.dumpEvent(Event,evtnum)
-                if not dumpAll: self.evtDisplay(Event,evtnum)
+                  
+            if self.writeRecon:
+                dets = ['TDC','QDC']
+                for det,DICT in zip(dets,[self.aTDC,self.aQDC]):
+                    ks = sorted(DICT.keys())
+                    #print 'process.eventLoop det,ks',det,ks
+                    labels,data = [],[]
+                    for key in ks:
+                        labels.append(  det + '/' + key )
+                        data.append(  DICT[key] )
+                    EN = self.writer.writeEvent(labels,data,evtNo=evtnum)
+                # WFD data structure more complicated
+                # suppress storing of data when no pulses found
+                det = 'WFD'
+                ks = sorted(self.aWFD.keys())
+                del ks[ ks.index('prenames') ]
+                del ks[ ks.index('RunEventNumber') ]
+                prenames = self.aWFD['prenames']
+                use = {}
+                ipn = prenames.index('time')
+                for key in ks:
+                    use[key] = len(self.aWFD[key][ipn])>0
+                labels,data = [],[]
+                for ipn,pn in enumerate(prenames):
+                    for key in ks:
+                        if use[key]:
+                            labels.append( det + '/' + pn + '/' + key )
+                            data.append(self.aWFD[key][ipn])
+                EN = self.writer.writeEvent(labels,data,evtNo=evtnum)
+                label,data = 'Time',self.aTime                
+                EN = self.writer.writeEvent(label,data,evtNo=evtnum)
+                label,data = 'Temp',self.aTemp
+                EN = self.writer.writeEvent(label,data,evtNo=evtnum)
+                                    
+                    
+
         return
+
     def analTvT(self,raw,evtnum):
         '''
         analysis time, temperature data
@@ -582,7 +642,11 @@ class process():
         
         for x in QDC:
             if len(QDC[x])>1 and x!='N/C':
-                print 'process.QDC',moniker,'overlap',x,QDC[x]
+                self.overlaps += 1
+                if self.overlaps<=5:
+                    print 'process.QDC',moniker,'overlap',x,QDC[x]
+                if self.overlaps==5:
+                    print 'process.QDC Report of further overlaps will be suppressed'
                     
         return code
         
@@ -729,66 +793,77 @@ class process():
             self.dumpCalib()
             self.R.closeHDF5File()
         return
+    def defaultFileList(self):
+        '''
+        predetermined list of input files
+        '''
+        fnlist = ["/Users/djaffe/work/1TonData/Filled_151217/run585.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run586.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run587.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run588.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run589.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run590.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run591.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run592.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run593.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run594.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run595.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run596.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run597.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run598.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run599.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run600.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
+                "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
+        return fnlist
 
 if __name__ == '__main__' :
-    nevt = big = 9999999999
-    runstring = None
-    dumpThres = -1.
-    dumpAll = False
-    if len(sys.argv)>1: nevt = int(sys.argv[1])           # 1st arg = # of events
-    if len(sys.argv)>2: runstring = str(sys.argv[2])      # 2d arg = None = use default file list, = ALL = use all files in dir, = somestring = all files containing somestring in name
-    if len(sys.argv)>3: dumpThres = float(sys.argv[3])    # 3d arg = r in [0,1.]  = if random>r then dump
-    if len(sys.argv)>4: dumpAll = True                    # any 4th arg, dump every event
+    big = 9999999999
+    parser = OptionParser()
+    parser.add_option("-N","--Nevents",default=big,type=int,
+                      help="Number of events per input file to process. [default %default]")
+    parser.add_option("-C","--MakeInputFileList",action="store_true",
+                      help="Make input file list from all appropriate files in raw data directory")
+    parser.add_option("-s","--RunString",default=None,type=str,
+                      help="String to match when selecting input files. If None, then use default file list [Default %default]")
+    parser.add_option("-O","--OneRunOnly",action="store_true",
+                      help="Process only the first run in the filelist")
+    parser.add_option("-t","--DumpThreshold",default=0.9999,type=float,
+                      help="Dump threshold. If random>threshold then dump event [default %default]")
+    parser.add_option("-A","--DumpAll",action="store_true",
+                      help="Dump every event")
+    parser.add_option("-W","--WriteRecon",action="store_true",
+                      help="Write out reconstruction/calibrated events to file")
+    parser.add_option("-T","--TemperatureVsTime",action="store_true",
+                      help="Just do temperature vs time analysis")
+
+    (options, args) = parser.parse_args(args=sys.argv)
+    print 'options',options
+    nevt = options.Nevents
+    dumpAll = options.DumpAll
+    dumpThres=options.DumpThreshold
     P = process()
-    
+    P.writeRecon = options.WriteRecon
 
+    # get list of potential input files
     rawDataDir = "/Users/djaffe/work/1TonData/Filled_151217/"
-    ######## enable to dump calib data for all files in rawDataDir
-    if 0: 
-        P.seeCalibData(rawDataDir)
-        sys.exit('End of calibration data dump')
+    if options.MakeInputFileList: 
+        fnlist = P.getRawDataList(rawDataDir)
+    else:
+        fnlist = P.defaultFileList()
 
-    
-    fnlist = ["/Users/djaffe/work/1TonData/Filled_151217/run585.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run586.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run587.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run588.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run589.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run590.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run591.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run592.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run593.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run594.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run595.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run596.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run597.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run598.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run599.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run600.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
-            "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
-
-    if runstring is not None :
+    # winnow list of input files. 
+    if options.RunString is not None:
         newlist = []
-        if runstring.lower()=='all':
-            newlist = P.getRawDataList(rawDataDir)
-        else:
-            for fn in fnlist:
-                if runstring in fn: newlist.append(fn)
-            if len(newlist)==0:
-                # look for file in rawDataDir
-                flist = P.getRawDataList(rawDataDir)
-                for fn in flist:
-                    if runstring in fn: newlist.append(fn)
+        for fn in fnlist:
+            if options.RunString in fn: newlist.append(fn)
         if len(newlist)==0:
-            sys.exit( 'ERROR Input runstring '+runstring+'yields zero matches')
-        else:
-            print 'file name list contains',len(newlist),'entries. First,last=',newlist[0],newlist[-1]
-            
+            sys.exit("process.main ERROR RunString " + options.RunString + " produced zero length file list")
         fnlist = newlist
-        
-    if nevt<big and runstring is None: fnlist = [fnlist[7]] # debug with one file
+    if options.OneRunOnly: fnlist = [fnlist[0]]
 
+    print 'fnlist',fnlist
+        
     # create name of output root file
     f = sorted(fnlist)
     f1,f2 = P.getFilePrefix(f[0]),P.getFilePrefix(f[-1])
@@ -798,14 +873,25 @@ if __name__ == '__main__' :
     for q in g:
         rfn += q
         if len(g)>1 and '-' not in rfn: rfn += '-'
+    outputFilePrefix = rfn
     rfn += '.root'
-    print 'Output root file name is',rfn
+    print 'process.main Output root file name is',rfn
+    reconfn = outputFilePrefix + '.h5'
+    if options.WriteRecon:
+        print 'process.main Output recon file name is',reconfn
+        P.writer.openFile(reconfn)
 
+
+    # begin processing
     first = True
     for fn in fnlist:
         P.startRun(file=fn)
         if first: P.start()
-        P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=False)
+        P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime)
         P.endRun()
         first = False
-    P.finish(rfn)
+    OK = P.finish(rfn=rfn)
+
+    print 'back in __main__'
+
+    sys.exit('Normal exit')  ############EXIT EXIT EXIT ######################
