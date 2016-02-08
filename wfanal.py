@@ -91,8 +91,11 @@ class wfanal():
                     X.append(float(i))
                     Y.append(v[i])
                 X,Y = numpy.array(X),numpy.array(Y)
+                #slope,yInt = self.fitLine(X,Y)
                 slope,yInt = self.fitLine(X,Y)
                 pBaseline.append([slope,yInt])
+                #print 'wfANAL.calcATB baseline slope,yInt',slope,yInt,'points(x,y,f(x)):',['{0} {1:.2f} {2:.2f},'.format(a,b,slope*a+yInt) for a,b in zip(X,Y)]
+                #print 'wfANAL.calcATB baseline Qslope,QyInt',Qslope,QyInt,'points(x,y,f(x)):',['{0} {1:.2f} {2:.2f},'.format(a,b,Qslope*a+QyInt) for a,b in zip(X,Y)]
                 
                 X,Y = [],[]
                 area,tArea,minPH,imin = 0., 0., 1.e20, None
@@ -121,9 +124,10 @@ class wfanal():
                 V = numpy.array(Y[i-i0:i+2-i0])
                 s,yI = self.fitLine(U,V)
                 t = (fthres-yI)/s
+                #print 'wfanal.calcATB t',t,'s,yI',s,yI,'fthres',fthres,'i0,i1,i2,i3',i0,i1,i2,i3,'i,imin',i,imin,'U,V',U,V
                 pTime.append(t)
         return pArea,pTime
-    def fitLine(self,X,Y):
+    def fitLineOld(self,X,Y):
         '''
         least squares solution for line with points X,Y
         '''
@@ -138,12 +142,48 @@ class wfanal():
             sx = sum(X)
             sxy= sum(X*Y)
             if sy==0.:
+                print 'wfanal.fitLine: sy=',sy
                 sxx = sum(X*X)
                 b = (sy/sx - sxy/sxx) / (N/sx - sx/sxx)
                 m = (sy - b*N)/sx
             else:
                 m = (sy/N - syy/sy)/(sx/N -sxy/sy)
                 b = (sy-m*sx)/N
+        return m,b
+    def fitLine(self,X,Y):
+        '''
+        least squares solution for line with points X,Y
+        calculate chi-square like
+        '''
+        N  = float(len(X))
+        ##print 'wfanal.fitLine:X',X,'Y',Y
+
+        sy = sum(Y)
+        syy= sum(Y*Y)
+        sx = sum(X)
+        sxy= sum(X*Y)
+        sxx= sum(X*X)
+        results = []
+        for i in range(2):
+            m,b,chi = 0.,0.,1.e20
+            if i==0:
+                if sx!=0:
+                    b = (sy*sxx- sxy*sx) / (N*sxx - sx*sx)
+                    m = (sy - b*N)/sx
+                    Z = Y-(m*X+b)
+                    chi = sum(Z*Z)
+            else:
+                if sy!=0:
+                    m = (sy*sy- syy*N) /(sx*sy-sxy*N)
+                    b = (sy-m*sx)/N
+                    Z = Y-(m*X+b)
+                    chi = sum(Z*Z)
+            results.append( [m,b,chi] )
+        #print 'wfanal.fitLine: results',results
+        if results[0][2]<results[1][2]:
+            m,b = results[0][0:2]
+        else:
+            m,b = results[1][0:2]
         return m,b
     def getPed(self,v,top=100):
         '''

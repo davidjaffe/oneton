@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 '''
 write out hdf5 file for 1ton
+
+workflow
+loop on runs
+   open input file for each run
+   openFile for output
+   setRunNum
+   loop on events
+      writeEvent
+   close input file
+close output file
+   
 20160203
 '''
 import h5py

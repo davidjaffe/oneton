@@ -16,11 +16,13 @@ import os
 import Logger
 import wfanal
 import calibThermocouple
+import writer
 
 class process():
     def __init__(self):
         self.R = reader.reader()
         self.W = wfanal.wfanal()
+        self.writer = writer.writer()
         self.cT = calibThermocouple.calibThermocouple()
         self.gU= graphUtils.graphUtils()
         
@@ -288,11 +290,14 @@ class process():
         loop over events in order of increasing event number
         '''
         dumpOn = dumpThres>0 and not timeTempOnly
+        dumpFirstEventOfEachRun = False
         
         CalData = self.R.getCalData()
         EvtDir  = self.R.getEvtDir()
 
         if dumpAll: self.dumpCalib()
+
+        self.evtCode = {}
         
         sEvtKeys = sorted(EvtDir.keys(),key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
@@ -303,7 +308,7 @@ class process():
             if int(evtnum)%1000==0: print 'Event#',evtkey,'_________'
 
             dumpEvt = dumpAll or \
-                (dumpOn and (int(evtnum)%10000==1 or numpy.random.uniform()>dumpThres))
+                (dumpOn and ( (int(evtnum)%10000==1 and dumpFirstEventOfEachRun) or numpy.random.uniform()>dumpThres))
             
             missing = self.R.unpackEvent(Event)
             if len(missing)==0: # OK
@@ -311,10 +316,15 @@ class process():
 
                 if not timeTempOnly:
                     triggers = self.R.unpackTrigger(Event['TDC'])
-                    self.analTDC(Event['TDC'])
-                    self.analQDC(Event,evtnum)
-                    self.analWFD(Event,evtnum)
+                    self.evtCode['TDC'] = tdcCode = self.analTDC(Event['TDC'])
+                    self.evtCode['QDC'] = qdcCode = self.analQDC(Event,evtnum)
+                    self.evtCode['WFD'] = wfdCode = self.analWFD(Event,evtnum)
 
+                    if wfdCode>0:
+                        print 'process.eventLoop evtnum',evtnum,'wfdCode',wfdCode
+                        self.dumpaWFD()
+                        self.evtDisplay(Event,evtnum)
+                        self.dumpEvent(Event,evtnum)
                 
             if dumpEvt:
                 self.dumpEvent(Event,evtnum)
@@ -325,8 +335,10 @@ class process():
         analysis time, temperature data
         '''
         ti = self.R.unpackTime(raw)
+        self.aTime = ti
         rawtemp = self.R.unpackTemperature(raw)
         caltemp = self.cT.getCalibTC(rawtemp)
+        self.aTemp = [rawtemp, caltemp]
         self.Times.append(ti)
         self.rawTemps.append(rawtemp)
         self.calTemps.append(caltemp)
@@ -401,7 +413,6 @@ class process():
         WFDcd = self.R.assocWFD(raw,pedsub=True)
         channels = sorted(WFDcd.keys())
 
-
         # create hist titles. first hist has triggers
         triggers = self.R.unpackTrigger(raw['TDC'])
         c = 'Trigs'
@@ -411,8 +422,9 @@ class process():
         XMI= 19.5
         XMA= XMI+float(NX)
             
-        H,HR = [],[]
-        self.hWFD,self.hrWFD = {},{}
+        H = []
+        self.hWFD = {}
+        mostPulses = -1
         for cd in channels:
             w = ''
             if channels.index(cd)==0: w = c
@@ -427,95 +439,104 @@ class process():
                 w += ' noTDC '
             self.hWFD[cd] = h = self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w)
             H.append(h)
-            self.hrWFD[cd] = hr= self.R.displayWFDnew(WFDcd[cd],cd,pretitle=w+' Z',NX=NX,XMI=XMI,XMA=XMA)
-            HR.append(hr)
+            mostPulses = max(mostPulses,len(self.aWFD[cd][2]))
+                
 
         # increase size of x,y labels
-        for h,hr in zip(H,HR):
+        for h in H:
             for a in ["x","y"]:
                 s = h.GetLabelSize(a)
                 h.SetLabelSize(2.*s,a)
-                s = hr.GetLabelSize(a)
-                hr.SetLabelSize(2.*s,a)
         s = 'run'+str(self.R.getRunDetail('run'))+'evt'+str(evtnum)
 
         self.diagnoseWFD(fname=s,figdir=self.WFfigdir)
-
-        self.gU.drawMultiHists(H,fname=s,figdir=self.WFfigdir,statOpt=0,dopt='Hist')
-        for h in H: h.Delete()
-
-        s += 'zoomed'
-        self.gU.drawMultiHists(HR,fname=s,figdir=self.WFfigdir,statOpt=0,dopt='Hist')
-        for hr in HR: hr.Delete()
-        
+        if 'WFD' in self.evtCode:
+            if self.evtCode['WFD']>0 and mostPulses>-1:
+                for zP in range(mostPulses):
+                    self.diagnoseWFD(fname=s,figdir=self.WFfigdir,zoomPulse=zP)
                     
         return
-    def diagnoseWFD(self,fname='diagnoseWFD',figdir=''):
+    def diagnoseWFD(self,fname='diagnoseWFD',figdir='',zoomPulse=-1):
         '''
         overlay histograms of waveforms with results of wfanal
+        if zoomPulse is valid index of pulse start, stop then zoom in around pulse
         '''
         md = sorted(self.hWFD.keys())
-        for i,DICT in enumerate([self.hWFD,self.hrWFD]):
-            # arcane bullshit to draw lines...???
-            lines = {}
-            for icd,cd in enumerate(md):
+        DICT = self.hWFD
 
-                V = self.aWFD[cd] #### [ped,iPulse,subPperP,pArea,pTime]
-                h = DICT[cd]
-                ymi,yma = h.GetMinimum(),h.GetMaximum()
-                xmi,xma = h.GetXaxis().GetXmin(),h.GetXaxis().GetXmax()
-                h.SetStats(0)
-                ped = V[0]
-                L =  ROOT.TLine(xmi,ped,xma,ped)
+        # arcane bullshit to draw lines...???
+        lines = {}
+        for icd,cd in enumerate(md):
+
+            V = self.aWFD[cd] #### [ped,pedsd,iPulse,subPperP,pArea,pTime]
+            h = DICT[cd]
+
+            ymi,yma = h.GetMinimum(),h.GetMaximum()
+            xmi,xma = h.GetXaxis().GetXmin(),h.GetXaxis().GetXmax()
+            h.SetStats(0)
+            ped = V[0]
+            L =  ROOT.TLine(xmi,ped,xma,ped)
+            L.SetLineColor(ROOT.kGreen)
+            lines[cd] = [ L ]
+            pedsd = V[1]
+            for x in [-1.,1.]:
+                y = ped+x*pedsd
+                L = ROOT.TLine(xmi,y,xma,y)
                 L.SetLineColor(ROOT.kGreen)
-                lines[cd] = [ L ]
-                pedsd = V[1]
-                for x in [-1.,1.]:
-                    y = ped+x*pedsd
-                    L = ROOT.TLine(xmi,y,xma,y)
-                    L.SetLineColor(ROOT.kGreen)
-                    L.SetLineStyle(3)
+                L.SetLineStyle(3)
+                lines[cd].append( L )
+            iPulse = V[2]
+            for pair in iPulse:
+                for ib in pair:
+                    L = ROOT.TLine(float(ib),ymi,float(ib),yma)
+                    L.SetLineColor(ROOT.kBlue)
+                    L.SetLineStyle(3) # dotted
                     lines[cd].append( L )
-                iPulse = V[2]
-                for pair in iPulse:
-                    for ib in pair:
-                        L = ROOT.TLine(float(ib),ymi,float(ib),yma)
-                        L.SetLineColor(ROOT.kBlue)
-                        L.SetLineStyle(3) # dotted
-                        lines[cd].append( L )
-                pTime = V[5]
-                for t in pTime:
-                    L = ROOT.TLine(t,ymi,t,yma)
-                    L.SetLineColor(ROOT.kRed)
-                    L.SetLineStyle(2) # dashed
-                    lines[cd].append( L )
+            pTime = V[5]
+            for t in pTime:
+                L = ROOT.TLine(t,ymi,t,yma)
+                L.SetLineColor(ROOT.kRed)
+                L.SetLineStyle(2) # dashed
+                lines[cd].append( L )
 
-            pdf = fname + '_'+str(i) 
-            if figdir!='': pdf = figdir + pdf
-            ps = pdf + '.ps'
-            pdf= pdf + '.pdf'
-            ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # no pop up
-            xsize,ysize = 1100,850 # landscape style
-            canvas = ROOT.TCanvas(pdf,fname,xsize,ysize)
-            canvas.Divide(2,4)
-            for icd,cd in enumerate(md):
-                canvas.cd(icd+1)
-                h = DICT[cd]
-                h.SetStats(0)
-                h.Draw("hist")
-                for L in lines[cd]:
-                    L.Draw()
-                    canvas.Modified() # this one?
-                    canvas.Update() # is this needed?
-                    #print L.Print()
-            if 0:
-                canvas.cd()
-                canvas.Update()
-                canvas.Modified()    
-                canvas.Print(ps,'Landscape')
-                os.system('ps2pdf ' + ps + ' ' + pdf)
-                if os.path.exists(pdf): os.system('rm ' + ps)
-            self.gU.finishDraw(canvas,ps,pdf,ctitle=fname)
+        pdf = fname #+ '_'+str(i)
+        if zoomPulse>-1: pdf += 'zoomPulse'+str(zoomPulse)
+        if figdir!='': pdf = figdir + pdf
+        ps = pdf + '.ps'
+        pdf= pdf + '.pdf'
+        ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # no pop up
+        xsize,ysize = 1100,850 # landscape style
+        canvas = ROOT.TCanvas(pdf,fname,xsize,ysize)
+        canvas.Divide(2,4)
+        for icd,cd in enumerate(md):
+            canvas.cd(icd+1)
+            h = DICT[cd]
+
+            # zoom?
+            xlo=xhi=0
+            if zoomPulse>-1:
+                V = self.aWFD[cd] #### [ped,pedsd,iPulse,subPperP,pArea,pTime]
+                iPulse = V[2]
+                if len(iPulse)>zoomPulse:
+                    xlo = max(0,iPulse[zoomPulse][0]-30)
+                    xhi = min(iPulse[zoomPulse][1]+100,4092)
+            h.GetXaxis().SetRange(xlo,xhi)
+
+            h.SetStats(0)
+            h.Draw("hist")
+            for L in lines[cd]:
+                L.Draw()
+                canvas.Modified() # this one?
+                canvas.Update() # is this needed?
+                #print L.Print()
+        if 0:
+            canvas.cd()
+            canvas.Update()
+            canvas.Modified()    
+            canvas.Print(ps,'Landscape')
+            os.system('ps2pdf ' + ps + ' ' + pdf)
+            if os.path.exists(pdf): os.system('rm ' + ps)
+        self.gU.finishDraw(canvas,ps,pdf,ctitle=fname)
         return
     def AinB(self,A,B):
         for a in B:
@@ -526,7 +547,9 @@ class process():
         unpack and analyze QDCs
         Histogram of lo,hi range
         Compare lo,hi range when they overlap
+        return code = 0 = ok, otherwise not
         '''
+        code = 0
         runnum = self.R.getRunDetail('run')
         moniker = 'Run ' + str(runnum) + ' Event ' + str(evtnum)
         TL = ['All']
@@ -539,7 +562,9 @@ class process():
         QDC = self.R.assocQDC(raw)
         cd = sorted(QDC.keys())
         rng = ['hi','lo'] # low,high range: hilo =1,0
+        self.aQDC = {}
         for x in cd:
+            self.aQDC[x] = QDC[x]
             i = md.index(x)
             for y in QDC[x]:
                 #print 'process.analQDC x,QDC[x],y:',x,QDC[x],y
@@ -559,14 +584,16 @@ class process():
             if len(QDC[x])>1 and x!='N/C':
                 print 'process.QDC',moniker,'overlap',x,QDC[x]
                     
-        return
+        return code
         
     def analWFD(self,raw,evtnum):
         '''
         unpack and pedestal subtract waveforms
-        FIXME
+        return code = 0 = all ok, != 0 => not ok
         '''
         display = False
+
+        code = 0
 
         TL = ['All']
         TL.extend(self.R.unpackTrigger(raw['TDC']))
@@ -579,9 +606,20 @@ class process():
         debug = 0
         #if evtnum%100==3: debug = 1
         self.aWFD = {}
+        self.aWFD['RunEventNumber'] = [runnum, evtnum]
+        self.aWFD['prenames'] = prenames
         for x in cd:
             ped,pedsd,iPulse,subPperP,pArea,pTime = self.W.pulseAnal(WFD[x],x,debug=debug)
             self.aWFD[x] = V = [ped,pedsd,iPulse,subPperP,pArea,pTime]
+            for K in iPulse:
+                if K[0]<0 or K[1]<0:
+                    code = 1
+                    print 'process.analWFD ',x,'setting code',code,'iPulse',iPulse,'K',K
+            for t in pTime:
+                if t<0. :
+                    code = 2
+                    print 'process.analWFD ',x,'setting code',code,'pTime',pTime
+            #if code>0: a1,a2,a3,a4,a5,a6 = self.W.pulseAnal(WFD[x],x,debug=1)   ###### SPECIAL #####
             y = float(cd.index(x))
             for tl in TL:
                 for i,pren in enumerate(prenames):
@@ -594,11 +632,31 @@ class process():
                     else:
                         for v in V[i]:
                             self.Hists[name].Fill(float(v),y)
+        return code
+    def dumpaWFD(self):
+        '''
+        dump current contents of results of waveform analysis
+        '''
+        run,evt = None,None
+        sREN = 'RunEventNumber'
+        run,event = self.aWFD[sREN]
+        print 'process.dumpaWFD run',run,'event',event,' +++++++++++++++++'
+        spn = 'prenames'
+        prenames = self.aWFD[spn]
+        
+        for x in self.aWFD:
+            if x!=sREN and x!=spn:
+                print x,
+                for w,v in zip(prenames,self.aWFD[x]): print w,v,
+                print ''
+        print 'process.dumpaWFD ++++++++++++++++++++++++ end'
         return
     def analTDC(self,raw):
         '''
         analyze TDC data for a single event
+        return code = 0 = ok, otherwise not
         '''
+        code = 0
         TDCmd   = self.R.getModuleData('TDC','ChanDesc')
         Hists,TDChistnames = self.Hists,self.TDChistnames
         TL = ['All']
@@ -611,7 +669,10 @@ class process():
         cd = self.R.addChanDesc(raw,'TDC')
         rawCD, nsCD = {},{}
         for x,y in zip(cd,TDC)   : rawCD[x]=y
-        for x,y in zip(cd,TDCns) : nsCD[x] =y
+        self.aTDC = {}
+        for x,y in zip(cd,TDCns) :
+            nsCD[x] =y
+            self.aTDC[x] = y
 
         TDChits = []
 
@@ -644,7 +705,7 @@ class process():
                 for y in TDChits:
                     if y>x: Hists['TDC_vs_TDC'].Fill(x,y)
 
-        return
+        return code
     def getFilePrefix(self,fn):
         '''
         get file name prefix from full path name
@@ -744,7 +805,7 @@ if __name__ == '__main__' :
     for fn in fnlist:
         P.startRun(file=fn)
         if first: P.start()
-        P.eventLoop(nevt,dumpAll=dumpAll)
+        P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=False)
         P.endRun()
         first = False
     P.finish(rfn)
