@@ -74,6 +74,11 @@ class process():
         self.bookHists('WFD')
         return
     def startRun(self,file=None,tG=False):
+        '''
+        start run processing
+        report run details
+        if writing to hdf5, set the run number and write parts of run record
+        '''
         print 'process.startRun',file
         self.R.start(fn=file)
         self.R.reportRunDetail()
@@ -81,7 +86,11 @@ class process():
         if self.writeRecon:
             runnum = self.R.getRunDetail('run')
             self.writer.setRunNum(runnum)
-
+            self.writer.writeData('RunNumber', self.R.getRunDetail('run') )
+            self.writer.writeData('RunType',   self.R.getRunDetail('type') )
+            self.writer.writeData('Material',  self.R.getRunDetail('Material') )
+            self.writer.writeData('StartTime', self.R.getTime('Start_Time_str') )
+            self.writer.writeData('Comments',  self.R.getRunDetail('Comments') )
         return
     def endRun(self):
         self.R.closeHDF5File()
@@ -118,8 +127,6 @@ class process():
         '''
         self.R.summary()
         if self.writeRecon: self.writer.closeFile()
-
-
         
         tvtgraphs  = self.makeTvTgraphs()
         tvtmg = tvtgraphs[-1]
@@ -150,9 +157,7 @@ class process():
             self.gU.fixTimeDisplay(g,showDate=True)
             self.gU.color(g,2,2)
             self.gU.drawGraph(g,figDir=self.figdir)
-
         self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
-
                 
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()
@@ -168,9 +173,6 @@ class process():
         sc= s - 60.*60.*h - 60.*m
         dt = str(h)+'h'+str(m)+'m'+str(sc)
         print 'process.finish Job duration(s)',s,'or',dt
-
-
-        #self.writer.show(reconfn, group='/Run/000600/Event/000010/WFD')
 
         return True
     def bookHists(self,kind):

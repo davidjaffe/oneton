@@ -83,7 +83,11 @@ class writer():
         add data to output with path given by label.
         data and label should be equal length lists
         '''
-        for l,d in zip(label,data):
+        if type(label) is list:
+            DL,D = label,data
+        else:
+            DL,D = [label],[data]
+        for l,d in zip(DL,D):
             self.f.create_dataset(l,data=d)
             print 'writer.writeData label',l,'data',d
         return
