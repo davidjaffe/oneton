@@ -115,12 +115,16 @@ class writer():
                 i = K.index(b)
                 del( K[i] )
         return K
-    def show(self,fn,group=None):
+    def show(self,fn,group=None,h5pyf=None):
         '''
         print content of uniqified elements of group in hdf5 file named fn
+        OR contents of elements in h5pyf
         depends on writer.find, write.uniqify
         '''
-        f = h5py.File(fn,'r')
+        if h5pyf is None:
+            f = h5py.File(fn,'r')
+        else:
+            f = h5pyf
         self.Found = []
         if group is None:
             f.visit(self.find)
@@ -141,7 +145,7 @@ class writer():
             else:
                 for b in f[a]: print b,
             print ''
-        f.close()
+        if h5pyf is None: f.close()
         return
 
 if __name__ == '__main__' :
