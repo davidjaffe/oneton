@@ -86,11 +86,11 @@ class process():
         if self.writeRecon:
             runnum = self.R.getRunDetail('run')
             self.writer.setRunNum(runnum)
-            self.writer.writeData('RunNumber', self.R.getRunDetail('run') )
-            self.writer.writeData('RunType',   self.R.getRunDetail('type') )
-            self.writer.writeData('Material',  self.R.getRunDetail('Material') )
-            self.writer.writeData('StartTime', self.R.getTime('Start_Time_str') )
-            self.writer.writeData('Comments',  self.R.getRunDetail('Comments') )
+            self.writer.writeRunData('RunNumber', self.R.getRunDetail('run') )
+            self.writer.writeRunData('RunType',   self.R.getRunDetail('type') )
+            self.writer.writeRunData('Material',  self.R.getRunDetail('Material') )
+            self.writer.writeRunData('StartTime', self.R.getTime('Start_Time_str') )
+            self.writer.writeRunData('Comments',  self.R.getRunDetail('Comments') )
         return
     def endRun(self):
         self.R.closeHDF5File()

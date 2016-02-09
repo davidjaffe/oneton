@@ -78,6 +78,20 @@ class writer():
             self.r.create_dataset(Elab+l,data=d)
             
         return eN
+    def writeRunData(self,label,data):
+        '''
+        write run data
+        add data to output with path given by label + path for this run
+        data and label should be equal length lists
+        '''
+        if type(label) is list:
+            DL,D = label,data
+        else:
+            DL,D = [label],[data]
+        for l,d in zip(DL,D):
+            self.r.create_dataset(l,data=d)
+            print 'writer.writeRunData label',l,'data',d
+        return
     def writeData(self,label,data):
         '''
         add data to output with path given by label.
