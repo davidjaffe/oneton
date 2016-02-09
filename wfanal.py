@@ -167,14 +167,16 @@ class wfanal():
         for i in range(2):
             m,b,chi = 0.,0.,1.e20
             if i==0:
-                if sx!=0:
-                    b = (sy*sxx- sxy*sx) / (N*sxx - sx*sx)
+                den = (N*sxx - sx*sx)
+                if sx!=0. and den!=0.:
+                    b = (sy*sxx- sxy*sx) / den
                     m = (sy - b*N)/sx
                     Z = Y-(m*X+b)
                     chi = sum(Z*Z)
             else:
-                if sy!=0:
-                    m = (sy*sy- syy*N) /(sx*sy-sxy*N)
+                den = (sx*sy-sxy*N)
+                if N!=0. and den!=0.:
+                    m = (sy*sy- syy*N) / den
                     b = (sy-m*sx)/N
                     Z = Y-(m*X+b)
                     chi = sum(Z*Z)
