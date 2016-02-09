@@ -48,10 +48,11 @@ class second():
                 if 'WFD' in data: WFDtime,WFDarea = self.getWFD(data['WFD'])
                 Time = data['Time']
                 Temp = data['Temp']
+                self.analyze(TDC,QDC,WFDtime,WFDarea,Time,Temp)
         return
     def book(self):
         self.Hists = {}
-        for x in ['S0','S1','S2','S3','S4','S5']:
+        for x in ['S0','S1','S2','S3','S4','S5','S6','S7']:
             name = 'WFD_dt_'+x
             title = name.replace('_',' ')
             self.Hists[name] = TH1D(name,title,100,0.,400.)
@@ -66,8 +67,8 @@ class second():
         if WFDtime is not None:
             for x in WFDtime:
                 ts = WFDtime[x]
-                name = 'WFD_dt_'+x
                 if len(ts)>1:
+                    name = 'WFD_dt_'+x
                     for i,t in enumerate(ts):
                         if i+1<len(ts):
                             dt = ts[i+1]-t
@@ -93,7 +94,7 @@ class second():
     def endroot(self,rfn):
         rf = TFile(rfn,"RECREATE")
         for h in self.Hists:rf.WriteTObject(self.Hists[h])
-        rf.close()
+        rf.Close()
         print 'second.endroot closed',rfn
         return
 if __name__ == '__main__' :
