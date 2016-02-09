@@ -42,7 +42,7 @@ class process():
 
         now = datetime.datetime.now()
         self.start_time = now
-        fmt = '%Y%m%d_%H%M%S'
+        fmt = '%Y%m%d_%H%M%S_%f'
         cnow = now.strftime(fmt)
         parentDir = 'Results/'+cnow+'/'
         self.logdir = parentDir + 'Log/'
@@ -838,12 +838,16 @@ if __name__ == '__main__' :
                       help="Write out reconstruction/calibrated events to file")
     parser.add_option("-T","--TemperatureVsTime",action="store_true",
                       help="Just do temperature vs time analysis")
+    parser.add_option("-Z","--UseCompression",default=None,type=str,
+                      help="Use compression in creation of output hdf5 file. options=lzf,gzip [default %default]")
 
     (options, args) = parser.parse_args(args=sys.argv)
     print 'options',options
     nevt = options.Nevents
     dumpAll = options.DumpAll
     dumpThres=options.DumpThreshold
+    compalg = options.UseCompression
+    
     P = process()
     P.writeRecon = options.WriteRecon
 
@@ -881,7 +885,7 @@ if __name__ == '__main__' :
     reconfn = outputFilePrefix + '.h5'
     if options.WriteRecon:
         print 'process.main Output recon file name is',reconfn
-        P.writer.openFile(reconfn)
+        P.writer.openFile(reconfn,compalg=compalg)
 
 
     # begin processing

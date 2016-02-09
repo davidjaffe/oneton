@@ -25,13 +25,18 @@ class writer():
         self.r = None
         self.RunNum   = None
         self.EventNum = None
+        self.compression = None
+        
         return
-    def openFile(self,fn):
+    def openFile(self,fn,compalg='gzip'):
         '''
         open hdf5 file for writing
         '''
         self.f = h5py.File(fn,'w')
-        print 'writer.openFile opened',self.f.filename
+        if compalg is not None:
+            if compalg.lower()=='gzip': self.compression = 'gzip'
+            if compalg.lower()=='lzf' : self.compression = 'lzf'
+        print 'writer.openFile opened',self.f.filename,'will be written with compression',self.compression
         return
     def closeFile(self):
         '''
@@ -51,6 +56,26 @@ class writer():
         self.r = self.f.create_group('Run/'+rnm)
         self.EventNum = None
         return
+    def createDataset(self,group,label,data):
+        '''
+        simple interface to h5py create_dataset method
+        to implement compression if requested.
+        Note that scalers can't be compressed, so don't try
+        '''
+        comp = self.compression
+        if comp is not None:
+            #print 'type(data)',type(data)
+            scaler = isinstance(data, numpy.int32) or isinstance(data, str) or isinstance(data, numpy.float64) or isinstance(data,float)
+            if scaler : comp = None
+        #print 'comp',comp
+        
+        if comp=='gzip':
+            group.create_dataset(label,data=data,compression='gzip',compression_opts=9)
+        elif comp=='lzf':
+            group.create_dataset(label,data=data,compression='lzf')
+        else:
+            group.create_dataset(label,data=data)
+        return 
     def writeEvent(self,datalabel,data,evtNo=None):
         '''
         write array of data to hdf5 event group
@@ -75,7 +100,8 @@ class writer():
             DL,D = [datalabel],[data]
         for l,d in zip(DL,D):
             #print 'writer.writeEvent Elab+l,d',Elab+l,d
-            self.r.create_dataset(Elab+l,data=d)
+#            self.r.create_dataset(Elab+l,data=d)
+            self.createDataset(self.r, Elab+l,d)
             
         return eN
     def writeRunData(self,label,data):
@@ -89,7 +115,8 @@ class writer():
         else:
             DL,D = [label],[data]
         for l,d in zip(DL,D):
-            self.r.create_dataset(l,data=d)
+            #self.r.create_dataset(l,data=d)
+            self.createDataset(self.r,l,d)
             print 'writer.writeRunData label',l,'data',d
         return
     def writeData(self,label,data):
@@ -102,7 +129,8 @@ class writer():
         else:
             DL,D = [label],[data]
         for l,d in zip(DL,D):
-            self.f.create_dataset(l,data=d)
+            #self.f.create_dataset(l,data=d)
+            self.createDataset(self.f,l,d)
             print 'writer.writeData label',l,'data',d
         return
 
