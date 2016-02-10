@@ -400,7 +400,7 @@ Zpmt.extend([Ztop,Ztop])
 
 ### positions of bottom hodoscopes H4, H5 (give X,Y,Z of corners starting at back right)
 ### H5
-Xright = 0.5*(offset + columns['rcm'][0] - columns['lcm'][0])
+Xright = 0.5*(offset - columns['rcm'][0] - columns['lcm'][0]) - bar
 xbr = Xright - (8.+9./16.)*2.54
 xbl = Xright - (20.5)*2.54
 xfr = Xright - (8.5)*2.54
@@ -416,6 +416,19 @@ Zbot = Ztop - (0.4)*2.54
 Hodos = {}
 Hodos['H5'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+
+### H4
+xbr = Xright - (22.+7./16.)*2.54
+xbl = Xright - (34.5)*2.54
+xfr = Xright - (22.+3./8.)*2.54
+xfl = Xright - (34.+7./16.)*2.54
+ybr = Yback + bar/2. - (11.75)*2.54
+ybl = Yback + bar/2. - (12.)*2.54
+yfr = Yfront - bar/2. - bar + (2.+1./8.)*2.54
+yfl = Yfront - bar/2. - bar + (2.+1./8.)*2.54
+Hodos['HF'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+                [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+
     
 
 
