@@ -20,7 +20,7 @@ import writer
 from optparse import OptionParser
 
 class process():
-    def __init__(self):
+    def __init__(self,makeDirs=True):
         self.R = reader.reader()
         self.W = wfanal.wfanal()
         self.writer = writer.writer()
@@ -39,32 +39,32 @@ class process():
         self.rawTemps = []
         self.calTemps = []
 
-
-        now = datetime.datetime.now()
-        self.start_time = now
-        fmt = '%Y%m%d_%H%M%S_%f'
-        cnow = now.strftime(fmt)
-        parentDir = 'Results/'+cnow+'/'
-        self.logdir = parentDir + 'Log/'
-        self.figdir = parentDir + 'Figures/'
-        self.WFfigdir = self.figdir + 'WF/'
-        self.TDCfigdir= self.figdir + 'TDC/'
-        self.outputdir= parentDir + 'Output/'
-        dirs = [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir]
-        for d in dirs:
-            if os.path.isdir(d):
-               pass
-            else:
-                try:
-                    os.mkdir(d)
-                except IOError,e:
-                    print 'process__init__',e
+        if makeDirs:
+            now = datetime.datetime.now()
+            self.start_time = now
+            fmt = '%Y%m%d_%H%M%S_%f'
+            cnow = now.strftime(fmt)
+            parentDir = 'Results/'+cnow+'/'
+            self.logdir = parentDir + 'Log/'
+            self.figdir = parentDir + 'Figures/'
+            self.WFfigdir = self.figdir + 'WF/'
+            self.TDCfigdir= self.figdir + 'TDC/'
+            self.outputdir= parentDir + 'Output/'
+            dirs = [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir]
+            for d in dirs:
+                if os.path.isdir(d):
+                    pass
                 else:
-                    print 'process__init__ created',d
-        lfn = self.logdir + cnow + '.log'
-        sys.stdout = Logger.Logger(fn=lfn)
-        print 'process__init__ Output directed to terminal and',lfn
-        print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
+                    try:
+                        os.mkdir(d)
+                    except IOError,e:
+                        print 'process__init__',e
+                    else:
+                        print 'process__init__ created',d
+            lfn = self.logdir + cnow + '.log'
+            sys.stdout = Logger.Logger(fn=lfn)
+            print 'process__init__ Output directed to terminal and',lfn
+            print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
 
        
         return
@@ -78,20 +78,22 @@ class process():
         start run processing
         report run details
         if writing to hdf5, set the run number and write parts of run record
+        return True for successful start
         '''
         print 'process.startRun',file
-        self.R.start(fn=file)
-        self.R.reportRunDetail()
-        if tG: self.R.testGet()
-        if self.writeRecon:
-            runnum = self.R.getRunDetail('run')
-            self.writer.setRunNum(runnum)
-            self.writer.writeRunData('RunNumber', self.R.getRunDetail('run') )
-            self.writer.writeRunData('RunType',   self.R.getRunDetail('type') )
-            self.writer.writeRunData('Material',  self.R.getRunDetail('Material') )
-            self.writer.writeRunData('StartTime', self.R.getTime('Start_Time_str') )
-            self.writer.writeRunData('Comments',  self.R.getRunDetail('Comments') )
-        return
+        OK = self.R.start(fn=file)
+        if OK: 
+            self.R.reportRunDetail()
+            if tG: self.R.testGet()
+            if self.writeRecon:
+                runnum = self.R.getRunDetail('run')
+                self.writer.setRunNum(runnum)
+                self.writer.writeRunData('RunNumber', self.R.getRunDetail('run') )
+                self.writer.writeRunData('RunType',   self.R.getRunDetail('type') )
+                self.writer.writeRunData('Material',  self.R.getRunDetail('Material') )
+                self.writer.writeRunData('StartTime', self.R.getTime('Start_Time_str') )
+                self.writer.writeRunData('Comments',  self.R.getRunDetail('Comments') )
+        return OK
     def endRun(self):
         self.R.closeHDF5File()
         if self.overlaps>0:
@@ -891,11 +893,11 @@ if __name__ == '__main__' :
     # begin processing
     first = True
     for fn in fnlist:
-        P.startRun(file=fn)
-        if first: P.start()
-        P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime)
-        P.endRun()
-        first = False
+        if P.startRun(file=fn):
+            if first: P.start()
+            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime)
+            P.endRun()
+            first = False
     OK = P.finish(rfn=rfn)
 
     print 'back in __main__'

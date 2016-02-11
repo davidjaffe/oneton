@@ -36,14 +36,18 @@ class reader():
         self.gU = graphUtils.graphUtils()
         print 'reader: initialized'
         return
-    def start(self,fn=None):
+    def start(self,fn=None,RequireCalib=True):
         '''
         start of run initialization
         handle zip files using zipfile:
         identify as zipfile, check if namelist in zipped files agrees with expected name,
         then extract .h5 file. keep track of name of extracted file so file can be deleted
         after use
+        If RequireCalib, then report it, go through file closing procedure and return False
+        
+        Return True for successful open satisfying all requirements.
         '''
+        OK = True
         bn = os.path.basename(fn)
         bnsuf = bn.split('.')[-1]
         if bnsuf=='zip':
@@ -71,9 +75,12 @@ class reader():
         else:
             self.CalData = None
             print 'XXXXXXXXXXXXXX NO CALIBRATION DATA IN FILE XXXXXXXXXXX'
+            if RequireCalib: OK = False
         self.EvtDir  = self.f['Events']
 
-        return
+        if not OK: self.closeHDF5File()
+
+        return OK
     def closeHDF5File(self):
         '''
         close the current HDF5
