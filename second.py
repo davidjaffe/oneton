@@ -162,22 +162,22 @@ class second():
             Events = self.f['Run/'+run+'/Event']
             for event in Events:
                 evtnum = int(event)
-                if evtnum%1000==0 : print 'second.loop event',evtnum
+                if evtnum%1000==0  : print 'second.loop event',evtnum
                 if evtnum>maxevt: break
                 data = Events[event]
                 TDC = self.getTDC(data['TDC'])
                 QDC = self.getQDC(data['QDC'])
-                WFDtime = WFDarea = None
-                if 'WFD' in data: WFDtime,WFDarea = self.getWFD(data['WFD'])
+                WFDtime = WFDarea = WFDnp = WFDped = WFDpsd = None
+                if 'WFD' in data: WFDtime,WFDarea,WFDnp,WFDped,WFDpsd = self.getWFD(data['WFD'])
                 Time = data['Time']
                 Temp = data['Temp']
-                self.analyze(TDC,QDC,WFDtime,WFDarea,Time,Temp)
+                self.analyze(TDC,QDC,WFDtime,WFDarea,WFDnp,WFDped,WFDpsd,Time,Temp)
         return
     def book(self):
         self.Hists = {}
         tS = self.gU.getTDatime(self.tStart,self.timeFormat)
         tE = self.gU.getTDatime(self.tEnd,self.timeFormat)
-        for trig in ['CT','M','LED']:
+        for itrig,trig in enumerate(['CT','M','LED']):
             for x in ['S0','S1','S2','S3','S4','S5','S6','S7']:
                 name,nx,xmi,xma = trig + '_WFD_dt_'+x,100,0.,400.
                 title = name.replace('_',' ')
@@ -203,8 +203,6 @@ class second():
                     for i,t in enumerate(self.tKeys):
                         self.Hists[name].GetXaxis().SetBinLabel(i+1,t)
                     self.Hists[name].LabelsOption("v","X")
-                    
-
 
                     nx,xmi,xma = 100,tS,tE
                     ny,ymi,yma = 50,0.,1000.
@@ -214,6 +212,18 @@ class second():
                     self.Hists[name].GetXaxis().SetCanExtend(False)
                     self.Hists[name].GetYaxis().SetCanExtend(False)
                     ##self.gU.reportHist(self.Hists[name])  #### FOR DEBUG
+
+                if itrig==0: # trigger-independent figures
+                    name,nx,xmi,xma = 'npulse_'+x,21,-0.5,20.5
+                    title = name.replace('_',' ')
+                    self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                    name,nx,xmi,xma = 'pedestal_'+x,50,-5.,5.
+                    title = name.replace('_',' ')
+                    self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                    name,nx,xmi,xma = 'ped_stdev_'+x,50,0.,5.
+                    title = name.replace('_',' ')
+                    self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                    
                     
             if 'LED'!=trig:
                 for Href in ['H0','H2']:
@@ -226,6 +236,8 @@ class second():
                             name,nx,xmi,xma = trig+'_TDC_'+H,100,0.,200.
                             title = name.replace('_',' ')
                             self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                            
+        # distribution of hodo coincidences
         nx = len(self.tKeys)
         xmi = -0.5
         xma = xmi + float(xmi)
@@ -235,8 +247,6 @@ class second():
             self.Hists[name].GetXaxis().SetBinLabel(i+1,t)
         self.Hists[name].LabelsOption("v","X")
 
-        nx,xmi,xma = len(self.tKeys),-0.5,-0.5+float(len(self.tKeys))
-        ny,ymi,yma = 50,0.,1000.
         
         
         
@@ -252,7 +262,7 @@ class second():
         if len(triggers)==0 and 'CT+M+LED' in TDC: triggers.append('LED')
         return triggers
             
-    def analyze(self,TDC,QDC,WFDtime,WFDarea,Time,Temp):
+    def analyze(self,TDC,QDC,WFDtime,WFDarea,WFDnp,WFDped,WFDpsd,Time,Temp):
         '''
         analysis
         get triggers based on TDC info
@@ -290,6 +300,25 @@ class second():
 
         
         if WFDtime is not None:
+            #print 'second.analyze WFDnp,WFDped,WFDpsd',WFDnp,WFDped,WFDpsd
+            
+            for x in WFDnp:
+                name = 'npulse_'+x
+                #print name,len(WFDnp[x]),
+                self.Hists[name].Fill(float(len(WFDnp[x])))
+            #print ''
+            for x in WFDped:
+                name = 'pedestal_'+x
+                #print name,WFDped[x],
+                self.Hists[name].Fill(WFDped[x][()])
+            #print ''
+            for x in WFDpsd:
+                name = 'ped_stdev_'+x
+                #print name,WFDpsd[x],
+                self.Hists[name].Fill(WFDpsd[x][()])
+            #print ''
+
+            
             for trig in triggers:
                 for x in WFDtime:
                     ts = WFDtime[x]
@@ -406,21 +435,24 @@ class second():
             QDC[x] = data[x]
         return QDC
     def getWFD(self,data):
-        WFDtime,WFDarea = {},{}
+        WFDtime,WFDarea,WFDnp,WFDped,WFDpsd = {},{},{},{},{}
         #print 'second.getWFD data',data,data.name
         #self.writer.show('xx',group=data.name,h5pyf=self.f)
         for x in data['time']:
             WFDtime[x] = data['time'][x]
             WFDarea[x] = data['area'][x]
-        return WFDtime,WFDarea
+            WFDnp[x]   = data['npulse'][x]
+            WFDped[x]  = data['ped'][x]
+            WFDpsd[x]  = data['pedsd'][x]
+        return WFDtime,WFDarea,WFDnp,WFDped,WFDpsd
     def endroot(self,rfn):
         '''
         make summary plots
         write out results to root file
         delete all hists/trees
         '''
-        p1list = ['CT_dT','CT_dT','CT_TDC','WFD_At_vs_Traj','WFD_At_vs_time']
-        p2list = ['wrtH0','wrtH2',''      ,''              ,''              ]
+        p1list = ['CT_dT','CT_dT','CT_TDC','WFD_At_vs_Traj','WFD_At_vs_time','npulse','pedestal','ped_stdev']
+        p2list = ['wrtH0','wrtH2',''      ,''              ,''              ,''      ,''        ,'']
         for p1 in ['WFD_time','WFD_dt','WFD_area','WFD_Area_tcut']:
             for t in ['CT','M','LED']:
                 p1list.append( t + '_' + p1)
@@ -474,9 +506,11 @@ if __name__ == '__main__' :
     #fnlist = [ 'ReconCalibDataFiles/run600-run602.h5.gz' ] #### TEST GZIP
     #fnlist = [ 'ForTesting/run600-run602.h5' ]  ##### TEST SOME FIGURES
 
+
     fnlist.sort() # order filelist by runs
     
     rfn = S.parentDir + 'second.root'
+    print 'second__main__',len(fnlist),'files in input list'
 
 
     S.book()
