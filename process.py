@@ -66,7 +66,6 @@ class process():
             print 'process__init__ Output directed to terminal and',lfn
             print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
 
-       
         return
     def start(self):
         self.bookHists('TDC')
@@ -310,7 +309,7 @@ class process():
         else:
             print 'process.bookHists Invalid input',kind
         return
-    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,timeTempOnly=True):
+    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,dumpNZcode=False,timeTempOnly=True):
         '''
         loop over events in order of increasing event number
         '''
@@ -350,7 +349,7 @@ class process():
                     self.evtCode['QDC'] = qdcCode = self.analQDC(Event,evtnum)
                     self.evtCode['WFD'] = wfdCode = self.analWFD(Event,evtnum)
 
-                    if wfdCode>0:
+                    if dumpNZcode and wfdCode>0:
                         print 'process.eventLoop evtnum',evtnum,'wfdCode',wfdCode
                         self.dumpaWFD()
                         self.evtDisplay(Event,evtnum)
@@ -836,6 +835,8 @@ if __name__ == '__main__' :
                       help="Dump threshold. If random>threshold then dump event [default %default]")
     parser.add_option("-A","--DumpAll",action="store_true",
                       help="Dump every event")
+    parser.add_option("-X","--DumpNonZeroWFDcode",action="store_true",
+                      help="Dump events with non-zro WFDcode")
     parser.add_option("-W","--WriteRecon",action="store_true",
                       help="Write out reconstruction/calibrated events to file")
     parser.add_option("-T","--TemperatureVsTime",action="store_true",
@@ -848,7 +849,9 @@ if __name__ == '__main__' :
     nevt = options.Nevents
     dumpAll = options.DumpAll
     dumpThres=options.DumpThreshold
+    dumpNZcode=options.DumpNonZeroWFDcode
     compalg = options.UseCompression
+    
     
     P = process()
     P.writeRecon = options.WriteRecon
@@ -895,7 +898,7 @@ if __name__ == '__main__' :
     for fn in fnlist:
         if P.startRun(file=fn):
             if first: P.start()
-            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime)
+            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime,dumpNZcode=dumpNZcode)
             P.endRun()
             first = False
     OK = P.finish(rfn=rfn)
