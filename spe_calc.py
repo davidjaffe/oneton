@@ -8,15 +8,17 @@ import graphUtils
 import ROOT
 from ROOT import TFile,TH1D,TH2D,gDirectory
 import gfit
+import pipath, os
 
 
 class spe_calc():
     def __init__(self):
         self.GFIT = gfit.gfit()
+        self.pip  = pipath.pipath()
         self.gU   = graphUtils.graphUtils()
-        self.rfn = ' Second/20160224_170053_982090/second.root'
-        self.rfn = 'Second/20160304_101658_998351/second.root'
-        self.outrfn = self.rfn.replace('/','_').replace('Second','SPE_FIT')
+        self.rfn = self.pip.fix( ' Second/20160224_170053_982090/second.root' )
+        self.rfn = self.pip.fix( 'Second/20160304_101658_998351/second.root' )
+        self.outrfn = self.rfn.replace(os.sep,'_').replace('Second','SPE_FIT')
         self.rf = None
         self.Hists = {}
         self.Graphs = {}
@@ -66,8 +68,8 @@ class spe_calc():
             for gname in sorted( self.Graphs.keys() ) :
                 if ss in gname: tmg.Add( self.Graphs[gname] )
             self.Graphs[name] = tmg
-            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir='FitResults/')
-            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir='FitResults/',SetLogy=True)
+            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.pip.fix('FitResults/'))
+            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.pip.fix('FitResults/'),SetLogy=True)
             
                 
         return

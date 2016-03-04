@@ -18,6 +18,7 @@ import wfanal
 import calibThermocouple
 import writer
 from optparse import OptionParser
+import pipath
 
 class process():
     def __init__(self,makeDirs=True):
@@ -26,6 +27,7 @@ class process():
         self.writer = writer.writer()
         self.cT = calibThermocouple.calibThermocouple()
         self.gU= graphUtils.graphUtils()
+        self.pip= pipath.pipath()
 
         self.writeRecon = None
         self.overlaps = 0
@@ -50,7 +52,8 @@ class process():
             self.WFfigdir = self.figdir + 'WF/'
             self.TDCfigdir= self.figdir + 'TDC/'
             self.outputdir= parentDir + 'Output/'
-            dirs = [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir]
+            # create list of platform-independent path
+            dirs = self.pip.fix( [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir] )
             for d in dirs:
                 if os.path.isdir(d):
                     pass
@@ -776,8 +779,10 @@ class process():
     def getFilePrefix(self,fn):
         '''
         get file name prefix from full path name
+        20160304 make platform independent
         '''
-        f = fn.split('/')[-1]
+        #f = fn.split('/')[-1]
+        f = os.path.basename(fn) 
         return f.split('.')[0]
     def getRawDataList(self,rawDataDir):
         '''
@@ -800,7 +805,7 @@ class process():
         '''
         predetermined list of input files
         '''
-        fnlist = ["/Users/djaffe/work/1TonData/Filled_151217/run585.h5",
+        fnlist = self.pip.fix ( ["/Users/djaffe/work/1TonData/Filled_151217/run585.h5",
                 "/Users/djaffe/work/1TonData/Filled_151217/run586.h5",
                 "/Users/djaffe/work/1TonData/Filled_151217/run587.h5",
                 "/Users/djaffe/work/1TonData/Filled_151217/run588.h5",
@@ -817,7 +822,7 @@ class process():
                 "/Users/djaffe/work/1TonData/Filled_151217/run599.h5",
                 "/Users/djaffe/work/1TonData/Filled_151217/run600.h5",
                 "/Users/djaffe/work/1TonData/Filled_151217/run601.h5",
-                "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"]
+                "/Users/djaffe/work/1TonData/Filled_151217/run602.h5"] )
         return fnlist
 
 if __name__ == '__main__' :
@@ -857,7 +862,7 @@ if __name__ == '__main__' :
     P.writeRecon = options.WriteRecon
 
     # get list of potential input files
-    rawDataDir = "/Users/djaffe/work/1TonData/Filled_151217/"
+    rawDataDir = P.pip.fix("/Users/djaffe/work/1TonData/Filled_151217/")
     if options.MakeInputFileList: 
         fnlist = P.getRawDataList(rawDataDir)
     else:

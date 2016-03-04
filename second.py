@@ -20,6 +20,7 @@ import writer
 #from optparse import OptionParser
 import process
 import gzip,shutil
+import pipath
 
 class second():
     def __init__(self,LEDonly=False):
@@ -27,6 +28,7 @@ class second():
         self.writer = writer.writer()
         self.P = process.process(makeDirs=False)
         self.gU= graphUtils.graphUtils()
+        self.pip= pipath.pipath()
 
         self.LEDonly = LEDonly
         self.trigList = ['CT','M','LED']
@@ -46,7 +48,7 @@ class second():
         self.parentDir = 'Second/'+cnow+'/'
         self.logdir = self.parentDir + 'Log/'
         self.figdir = self.parentDir + 'Figures/'
-        dirs = [self.parentDir, self.logdir, self.figdir]
+        dirs = self.pip.fix( [self.parentDir, self.logdir, self.figdir] ) # make paths platform indepedent
         for d in dirs:
             if os.path.isdir(d):
                 pass
@@ -609,7 +611,8 @@ class second():
         rlist = []
         s1list= []
         for x in fnlist:
-            s = x.split('/')[-1]
+#            s = x.split('/')[-1]
+            s = os.path.basename(x)
             if 'run' in s:
                 t = s.split('.')[0]
                 u = t.replace('run','')
@@ -627,7 +630,7 @@ if __name__ == '__main__' :
 
 
     S = second(LEDonly=LEDonly)
-    datadir = '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/'
+    datadir = S.pip.fix( '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/' )
     fnlist = S.P.getRawDataList(datadir)
 
     #print 'before fnlist',fnlist
@@ -646,7 +649,7 @@ if __name__ == '__main__' :
     fnlist = [ newlist[-1] ] ########### TEMPORARY
 
     # root file name
-    rfn = S.parentDir + 'second.root'
+    rfn = S.pip.fix( S.parentDir + 'second.root' )
     print 'second__main__',len(fnlist),'files in input list'
 
 
