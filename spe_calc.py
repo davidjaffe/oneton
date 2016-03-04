@@ -15,6 +15,7 @@ class spe_calc():
         self.GFIT = gfit.gfit()
         self.gU   = graphUtils.graphUtils()
         self.rfn = ' Second/20160224_170053_982090/second.root'
+        self.rfn = 'Second/20160304_101658_998351/second.root'
         self.outrfn = self.rfn.replace('/','_').replace('Second','SPE_FIT')
         self.rf = None
         self.Hists = {}
@@ -127,7 +128,7 @@ class spe_calc():
         hist = self.rf.Get(hn)
         return hist
 if __name__ == '__main__' :
-    h2n = 'LED_WFD_At_vs_run_S0'
+    #h2n = 'LED_WFD_At_vs_run_S0'
     SC = spe_calc()
     rfn = SC.rfn
     OK = SC.getHists(rfn)
