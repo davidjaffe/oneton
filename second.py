@@ -32,6 +32,11 @@ class second():
         self.trigList = ['CT','M','LED']
         if self.LEDonly: self.trigList = ['LED']
 
+        self.signalCtrs = ['S0','S1','S2','S3','S4','S5','S6','S7']
+        self.hodoCtrs   = ['H0','H1','H2','H3','H4','H5']
+        self.allCtrs    = self.signalCtrs
+        self.allCtrs.extend( self.hodoCtrs )
+
         self.Run1 = self.Run2 = self.currentRun = None
         
         now = datetime.datetime.now()
@@ -39,7 +44,9 @@ class second():
         fmt = '%Y%m%d_%H%M%S_%f'
         cnow = now.strftime(fmt)
         self.parentDir = 'Second/'+cnow+'/'
-        dirs = [self.parentDir]
+        self.logdir = self.parentDir + 'Log/'
+        self.figdir = self.parentDir + 'Figures/'
+        dirs = [self.parentDir, self.logdir, self.figdir]
         for d in dirs:
             if os.path.isdir(d):
                 pass
@@ -51,16 +58,26 @@ class second():
                 else:
                     print 'second__init__ created',d
 
+        lfn = self.logdir + cnow + '.log'
+        sys.stdout = Logger.Logger(fn=lfn)
+        print 'second__init__ Output directed to terminal and',lfn
+        print 'second__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
+
         # set time range for hists. taken from log files
         self.tStart = '12:05:49 01/11/16' # run537
-        self.tEnd   = '23:59:59 02/22/16' # in future...
         self.timeFormat = '%H:%M:%S %m/%d/%y'
+        self.tEnd   = now.strftime(self.timeFormat)
+
+        # for plotting time difference between triggers
+        self.lastEventTime = {}
+        for trig in self.trigList:
+            self.lastEventTime[trig] = None
 
                                         
-
+        # cut ranges for 'good' time measurement for WFD or TDC
         self.CTtimes = {} # for WFD and cosmic triggers
         self.LEDtimes = {} # for WFD and LED triggers
-        for c in ['S0','S1','S2','S3','S4','S5','S6','S7']:
+        for c in self.signalCtrs:
             self.CTtimes[c] = [120.,200.]
             if c in ['S4','S5']: self.CTtimes[c] = [90.,160.]
             self.LEDtimes[c] = [110.,150.]
@@ -70,6 +87,15 @@ class second():
         self.cutTimes = {}
         self.cutTimes['CT'] = self.CTtimes
         self.cutTimes['LED']= self.LEDtimes
+
+        ns = 3.
+        self.LED_TDC = {} # for TDC and LED triggers
+        self.LED_TDC['S0'] = [92.0-ns*2.0,92.0+ns*2.0] # 20160210 (runs830-839) + 20160211 (runs1040-1049)
+        self.LED_TDC['S1'] = [92.0-ns*1.3,92.0+ns*1.3]
+        self.LED_TDC['S2'] = [96.0-ns*1.0,96.0+ns*1.0]
+        self.LED_TDC['S3'] = [91.4-ns*1.1,91.4+ns*1.1]
+        self.LED_TDC['S4'] = [85.0-ns*1.4,85.0+ns*1.4]
+        self.LED_TDC['S5'] = [87.5-ns*2.5,87.5+ns*2.5]
 
         # used in getHodosInCoinc
         self.goodCoincNsigma = 4.
@@ -172,14 +198,19 @@ class second():
         loop over all events in file
         up to event number maxevt
         '''
+        evtFreq = max(1,min(1000,maxevt/10)) # frequency of debug print
+        
         for run in self.f['Run']:
             self.currentRun = runnum = int(run)
-            print 'second.loop run',runnum
+            print 'second.loop run',runnum,'event',
+
 
             Events = self.f['Run/'+run+'/Event']
             for event in Events:
                 evtnum = int(event)
-                if evtnum%1000==0  : print 'second.loop event',evtnum
+                if evtnum%evtFreq==0  :
+                    print evtnum,
+
                 if evtnum>maxevt: break
                 
                 data = Events[event]
@@ -193,23 +224,42 @@ class second():
                     Time = data['Time']
                     Temp = data['Temp']
                     self.analyze(TDC,QDC,WFDtime,WFDarea,WFDnp,WFDped,WFDpsd,Time,Temp)
+            print ''
+
+
         return
     def book(self):
+        
         self.Hists = {}
         tS = self.gU.getTDatime(self.tStart,self.timeFormat)
         tE = self.gU.getTDatime(self.tEnd,self.timeFormat)
+
+        # WFD area #bins, range
         nArea, maxArea = 200, 2000.
         if self.LEDonly: nArea, maxArea = 200,200.
+
+        runmi = float(self.Run1)-0.5
+        runma = float(self.Run2)+0.5
+        nrun = self.Run2 - self.Run1 + 1
+            
         for itrig,trig in enumerate( self.trigList ):
-            xmi = float(self.Run1)-0.5
-            xma = float(self.Run2)+0.5
-            nx = self.Run2 - self.Run1 + 1
+            nx,xmi,xma = nrun,runmi,runma
             name = trig + '_events_per_run'
             title = name.replace('_',' ')
             self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+
+            nx, xmi, xma = 200, 0., 20.
+            name = trig + '_seconds_btwn_triggers'
+            title = name.replace('_',' ')
+            self.Hists[name] = TH1D(name,title,nx,xmi,xma)
             
-            
-            for x in ['S0','S1','S2','S3','S4','S5','S6','S7']:
+            for x in self.allCtrs:
+                name,nx,xmi,xma = trig + '_QDC_'+x,400,0.,400.
+                title = name.replace('_',' ')
+                self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                
+            for x in self.signalCtrs:
+                            
                 name,nx,xmi,xma = trig + '_WFD_dt_'+x,100,0.,400.
                 title = name.replace('_',' ')
                 self.Hists[name] = TH1D(name,title,nx,xmi,xma)
@@ -246,9 +296,7 @@ class second():
                 ##self.gU.reportHist(self.Hists[name])  #### FOR DEBUG
 
                 # WFD area after WFDtime cut vs run numbe
-                xmi = float(self.Run1)-0.5
-                xma = float(self.Run2)+0.5
-                nx = self.Run2 - self.Run1 + 1
+                nx,xmi,xma = nrun,runmi,runma
                 ny,ymi,yma = nArea,0.,maxArea
                 name = trig + '_WFD_At_vs_run_'+x
                 title = name.replace('_',' ')
@@ -268,7 +316,7 @@ class second():
                     
             if 'LED'!=trig:
                 for Href in ['H0','H2']:
-                    for H in ['H0','H1','H2','H3','H4','H5']:
+                    for H in self.hodoCtrs:
                         if H!=Href:
                             name,nx,xmi,xma = trig+'_dT_'+H+'wrt'+Href,100,-20.,20.
                             title = name.replace('_',' ')
@@ -312,15 +360,17 @@ class second():
         obtain trajectories defined by hodoscopes for cosmic triggers
         plot WFD time and area
         '''
+        ### get triggers for this event
         triggers = self.getTriggers(TDC)
-        
+
+        ### event timestamp translation
         dt = datetime.datetime.fromtimestamp(Time[()])
         xt = datetime.datetime.strftime(dt,self.timeFormat)
         evtTime = self.gU.getTDatime(xt,fmt=self.timeFormat)
         #print 'second.analysis Time',Time[()], 'dt',dt, 'xt',xt, 'evtTime',evtTime
 
 
-        
+        ### determine hodoscope trajectories
         Traj = []
         if 'CT' in triggers:
             if 0:
@@ -340,27 +390,24 @@ class second():
                 i = self.tKeys.index(t)
                 self.Hists[name].Fill(float(i))
 
-        
+        ### WFD analysis
         if WFDtime is not None:
-            #print 'second.analyze WFDnp,WFDped,WFDpsd',WFDnp,WFDped,WFDpsd
-            
+
+            #  number of pulses, pedestal, std.dev.(pedestal)
             for x in WFDnp:
                 name = 'npulse_'+x
-                #print name,len(WFDnp[x]),
                 self.Hists[name].Fill(float(len(WFDnp[x])))
-            #print ''
             for x in WFDped:
                 name = 'pedestal_'+x
-                #print name,WFDped[x],
                 self.Hists[name].Fill(WFDped[x][()])
-            #print ''
             for x in WFDpsd:
                 name = 'ped_stdev_'+x
-                #print name,WFDpsd[x],
                 self.Hists[name].Fill(WFDpsd[x][()])
-            #print ''
 
-            
+
+            ## WFD time and area analysis
+            ## apply cuts on WFD time to select pulse for CT or LED analysis
+            ## plot quantities vs run
             for trig in triggers:
                 for x in WFDtime:
                     ts = WFDtime[x]
@@ -398,16 +445,30 @@ class second():
                                     name = trig + '_WFD_At_vs_run_'+x
                                     self.Hists[name].Fill(float(self.currentRun),abs(a))
 
-                                
+        ### loop over triggers. plot events/trigger, QDC counts, Hodo timing
         for trig in triggers:
             name = trig + '_events_per_run'
             self.Hists[name].Fill(float(self.currentRun))
+
+            if self.lastEventTime[trig] is None:
+                self.lastEventTime[trig] = Time[()]
+            else:
+                name = trig + '_seconds_btwn_triggers'
+                self.Hists[name].Fill(Time[()]-self.lastEventTime[trig])
+                self.lastEventTime[trig] = Time[()]
+                
+
+            
+            for ctr in QDC:
+                q = QDC[ctr][()][0][1]
+                name = trig + '_QDC_' + ctr
+                self.Hists[name].Fill(q)
 
             if 'LED'!=trig:
                 for Href in ['H0','H2']:
                     tref = None
                     if Href in TDC: tref = TDC[Href][1]
-                    for H in ['H0','H1','H2','H3','H4','H5']:
+                    for H in self.hodoCtrs : 
                         if H in TDC:
                             t = TDC[H][1]
                             #print 'H,t',H,t
@@ -503,7 +564,7 @@ class second():
         '''
         p1list = ['CT_dT','CT_dT','CT_TDC','WFD_At_vs_Traj','WFD_At_vs_time','WFD_At_vs_run','npulse','pedestal','ped_stdev']
         p2list = ['wrtH0','wrtH2',''      ,''              ,''              ,''             ,''      ,''        ,'']
-        for p1 in ['WFD_time','WFD_dt','WFD_area','WFD_Area_tcut']:
+        for p1 in ['WFD_time','WFD_dt','WFD_area','WFD_Area_tcut','QDC']:
             for t in self.trigList : 
                 p1list.append( t + '_' + p1)
                 p2list.append('')
@@ -524,7 +585,7 @@ class second():
                     dopt = 'box'
                     Logy = False
                     sopt = 0
-                self.gU.drawMultiHists(hlist,fname=fname,figdir=self.parentDir,setLogy=Logy,abscissaIsTime=abscissaIsTime,dopt=dopt,statOpt=sopt)
+                self.gU.drawMultiHists(hlist,fname=fname,figdir=self.figdir,setLogy=Logy,abscissaIsTime=abscissaIsTime,dopt=dopt,statOpt=sopt)
                 if 0 and 'vs_time' in phrase1.lower():
                     for x in hlist:  self.gU.reportHist(x)  #### FOR DEBUG
 
@@ -564,23 +625,25 @@ if __name__ == '__main__' :
     if len(sys.argv)>1: maxevt = int(sys.argv[1])
     if len(sys.argv)>2: LEDonly = True
 
-    fn = 'Results/20160208_163935/Output/run600-run602.h5'
 
     S = second(LEDonly=LEDonly)
     datadir = '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/'
     fnlist = S.P.getRawDataList(datadir)
 
+    #print 'before fnlist',fnlist
 
     
-    #fnlist = fnlist[:1] ##### TEMPORARY
 
     #fnlist = [ 'ReconCalibDataFiles/run600-run602.h5.gz' ] #### TEST GZIP
     #fnlist = [ 'ForTesting/run600-run602.h5' ]  ##### TEST SOME FIGURES
 
+    
     # get first,last run numbers in file list and re-arrange list in run number order
     S.Run1,S.Run2,newlist = S.getFirstLastRun(fnlist)
     print 'first run#',S.Run1,'last run#',S.Run2
     fnlist = newlist
+
+    fnlist = [ newlist[-1] ] ########### TEMPORARY
 
     # root file name
     rfn = S.parentDir + 'second.root'
