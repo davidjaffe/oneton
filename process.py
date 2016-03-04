@@ -39,6 +39,12 @@ class process():
         self.TDCfigdir= self.figdir + 'TDC/'
         self.outputdir= parentDir + 'Output/'
         dirs = [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir]
+        dirs = []        
+        windirs = []        
+        for item in dirs:
+            newstr = item.replace('/', '\\')
+            windirs += [newstr]
+        dirs = windirs
         for d in dirs:
             if os.path.isdir(d):
                pass
