@@ -349,7 +349,7 @@ class process():
                     self.evtCode['QDC'] = qdcCode = self.analQDC(Event,evtnum)
                     self.evtCode['WFD'] = wfdCode = self.analWFD(Event,evtnum)
 
-                    if dumpNZcode and wfdCode>0:
+                    if dumpAll or (dumpNZcode and wfdCode>0):
                         print 'process.eventLoop evtnum',evtnum,'wfdCode',wfdCode
                         self.dumpaWFD()
                         self.evtDisplay(Event,evtnum)
