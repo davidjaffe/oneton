@@ -238,7 +238,7 @@ class second():
 
         # WFD area #bins, range
         nArea, maxArea = 200, 2000.
-        if self.LEDonly: nArea, maxArea = 200,200.
+        if self.LEDonly: nArea, maxArea = 500,500.
 
         runmi = float(self.Run1)-0.5
         runma = float(self.Run2)+0.5
@@ -646,7 +646,7 @@ if __name__ == '__main__' :
     print 'first run#',S.Run1,'last run#',S.Run2
     fnlist = newlist
 
-    fnlist = [ newlist[-1] ] ########### TEMPORARY
+    #####fnlist = [ newlist[-1] ] ########### TEMPORARY
 
     # root file name
     rfn = S.pip.fix( S.parentDir + 'second.root' )

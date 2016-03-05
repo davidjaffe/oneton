@@ -108,6 +108,7 @@ class process():
         '''
         X = self.Times
         Y = self.rawTemps
+
         title = 'raw temp vs time'
         name = title.replace(' ','_')
         graw = self.gU.makeTGraph(X,Y,title,name)
@@ -129,39 +130,40 @@ class process():
         Delete all hists/trees in memory
         Print job timing stats
         '''
-        self.R.summary()
+        evtsSeen = self.R.summary()
         if self.writeRecon: self.writer.closeFile()
-        
-        tvtgraphs  = self.makeTvTgraphs()
-        tvtmg = tvtgraphs[-1]
-        rf = TFile(rfn,"RECREATE")
         nwrite = 0
-        for h in self.Hists: rf.WriteTObject(self.Hists[h])
-        nwrite += len(self.Hists)
-        for h in self.WFHists: rf.WriteTObject(h)
-        nwrite += len(self.WFHists)
-        for g in tvtgraphs: rf.WriteTObject(g)
-        nwrite += len(tvtgraphs)
-        rf.Close()
+        if evtsSeen > 0:
+            tvtgraphs  = self.makeTvTgraphs()
+            tvtmg = tvtgraphs[-1]
+            rf = TFile(rfn,"RECREATE")
 
-        # draw selected hists
-        srun = self.getFilePrefix(rfn)
-        for ref in self.refTDCs:
-            s = []
-            for h in self.Hists:
-                if 'dTDC' in h and h[-2:]==ref:
-                    s.append(self.Hists[h])
+            for h in self.Hists: rf.WriteTObject(self.Hists[h])
+            nwrite += len(self.Hists)
+            for h in self.WFHists: rf.WriteTObject(h)
+            nwrite += len(self.WFHists)
+            for g in tvtgraphs: rf.WriteTObject(g)
+            nwrite += len(tvtgraphs)
+            rf.Close()
 
-            if len(s)>0:
-                s.sort()
-                self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
+            # draw selected hists
+            srun = self.getFilePrefix(rfn)
+            for ref in self.refTDCs:
+                s = []
+                for h in self.Hists:
+                    if 'dTDC' in h and h[-2:]==ref:
+                        s.append(self.Hists[h])
 
-        # draw temp vs time
-        for g in tvtgraphs[0:-1]:
-            self.gU.fixTimeDisplay(g,showDate=True)
-            self.gU.color(g,2,2)
-            self.gU.drawGraph(g,figDir=self.figdir)
-        self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
+                if len(s)>0:
+                    s.sort()
+                    self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
+
+            # draw temp vs time
+            for g in tvtgraphs[0:-1]:
+                self.gU.fixTimeDisplay(g,showDate=True)
+                self.gU.color(g,2,2)
+                self.gU.drawGraph(g,figDir=self.figdir)
+            self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
                 
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()

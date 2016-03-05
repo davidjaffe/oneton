@@ -34,6 +34,9 @@ class reader():
         #print 'reader__init__ self.uniqueTriggers',self.uniqueTriggers
         
         self.gU = graphUtils.graphUtils()
+
+        self.topLevelKeys = ['Run_Info','Events']
+        
         print 'reader: initialized'
         return
     def start(self,fn=None,RequireCalib=True):
@@ -67,18 +70,23 @@ class reader():
             sys.exit('reader.start ERROR processing ' + fn +  ' UNKNOWN suffix ' + bnsuf)
             
         print 'reader.start run. File',fn
-        
-        self.RunInfo = self.f['Run_Info']
-        self.RunNumber = self.getRunDetail('run')
-        if 'Calibration' in self.f:
-            self.CalData = self.f['Calibration']
-        else:
-            self.CalData = None
-            print 'XXXXXXXXXXXXXX NO CALIBRATION DATA IN FILE XXXXXXXXXXX'
-            if RequireCalib: OK = False
-        self.EvtDir  = self.f['Events']
 
-        if not OK: self.closeHDF5File()
+        OK = set(self.topLevelKeys) <= set(self.f.keys())
+
+        if OK:
+            self.RunInfo = self.f['Run_Info']
+            self.RunNumber = self.getRunDetail('run')
+            if 'Calibration' in self.f:
+                self.CalData = self.f['Calibration']
+            else:
+                self.CalData = None
+                print 'XXXXXXXXXXXXXX NO CALIBRATION DATA IN FILE XXXXXXXXXXX'
+                if RequireCalib: OK = False
+            self.EvtDir  = self.f['Events']
+
+        if not OK:
+            print '+++++ INCOMPLETE FILE ++++++ '
+            self.closeHDF5File()
 
         return OK
     def closeHDF5File(self):
@@ -105,7 +113,7 @@ class reader():
             print ' ++++++ reader.summary missing datasets',
             for x in self.incompleteEvents: print self.incompleteEvents[x],x,',',
             print ''
-        return
+        return self.eventCalls
     def getEvtDir(self):
         return self.EvtDir
     def getCalData(self):
