@@ -9,19 +9,40 @@ import ROOT
 from ROOT import TFile,TH1D,TH2D,gDirectory
 import gfit
 import pipath, os
-
+import datetime
 
 class spe_calc():
     def __init__(self):
         self.GFIT = gfit.gfit()
         self.pip  = pipath.pipath()
         self.gU   = graphUtils.graphUtils()
-        self.rfn = self.pip.fix( ' Second/20160224_170053_982090/second.root' )
-        self.rfn = self.pip.fix( 'Second/20160304_101658_998351/second.root' )
-        self.outrfn = self.rfn.replace(os.sep,'_').replace('Second','SPE_FIT')
+
+        fmt = '%Y%m%d_%H%M%S_%f'
+        cnow = datetime.datetime.now().strftime(fmt)
+        d = outdir = os.path.join( 'FitResults', cnow )
+
+        if os.path.isdir(d):
+            pass
+        else:
+            try:
+                os.mkdir(d)
+            except IOError,e:
+                print 'spe_calc__init__',e
+            else:
+                print 'spe_calc__init__ created',d
+        self.figdir = outdir
+        
+        inputRootFileName = 'Second/20160224_170053_982090/second.root' 
+        inputRootFileName = 'Second/20160304_125953_037208/second.root'
+        inputRootFileName = 'Second/20160304_214633_049558/second.root'
+        
+        self.rfn = self.pip.fix( inputRootFileName )
+        self.outrfn = os.path.join( outdir, inputRootFileName.replace(os.sep,'_').replace('Second','SPE_FIT') )
         self.rf = None
         self.Hists = {}
         self.Graphs = {}
+
+        print 'spe_calc.__init__ ROOT files: input',self.rfn,'output',self.outrfn
 
         return
     def histLoop(self,drawEachFit=False):
@@ -68,8 +89,8 @@ class spe_calc():
             for gname in sorted( self.Graphs.keys() ) :
                 if ss in gname: tmg.Add( self.Graphs[gname] )
             self.Graphs[name] = tmg
-            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.pip.fix('FitResults/'))
-            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.pip.fix('FitResults/'),SetLogy=True)
+            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.figdir )
+            self.gU.drawMultiGraph(tmg, abscissaIsTime=False, drawLines=False, figdir=self.figdir ,SetLogy=True)
             
                 
         return
@@ -99,7 +120,7 @@ class spe_calc():
                         mupois = 1.
                         GoodFit,mean,emean, sgm, prob = self.GFIT.fit(py)
                     if debug: print 'ix,run#,GoodFit,mean,emean,sgm,prob {0} {6} {1} {2:.2f} {3:.2f} {4:.2f} {5:.3f}'.format(ix,GoodFit,mean,emean, sgm, prob, run)
-                    if draw: self.gU.drawFit(py,figdir='FitResults/',extraName=str(run))
+                    if draw: self.gU.drawFit(py,figdir=self.figdir,extraName=str(run))
                     results[run] = [GoodFit,mean,emean,sgm,prob,mupois]
                         
         return results
