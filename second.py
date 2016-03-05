@@ -23,25 +23,14 @@ import gzip,shutil
 import pipath
 
 class second():
-    def __init__(self,LEDonly=False):
+    def __init__(self,useLogger=True):
         self.f = None
         self.writer = writer.writer()
         self.P = process.process(makeDirs=False)
         self.gU= graphUtils.graphUtils()
         self.pip= pipath.pipath()
 
-        self.LEDonly = LEDonly
-        self.trigList = ['CT','M','LED']
-        if self.LEDonly: self.trigList = ['LED']
-
-        self.signalCtrs = ['S0','S1','S2','S3','S4','S5','S6','S7']
-        self.hodoCtrs   = ['H0','H1','H2','H3','H4','H5']
-        self.allCtrs    = self.signalCtrs
-        self.allCtrs.extend( self.hodoCtrs )
-
-        self.Run1 = self.Run2 = self.currentRun = None
-        
-        now = datetime.datetime.now()
+        self.now = now = datetime.datetime.now()
         self.start_time = now
         fmt = '%Y%m%d_%H%M%S_%f'
         cnow = now.strftime(fmt)
@@ -60,15 +49,34 @@ class second():
                 else:
                     print 'second__init__ created',d
 
-        lfn = self.logdir + cnow + '.log'
-        sys.stdout = Logger.Logger(fn=lfn)
-        print 'second__init__ Output directed to terminal and',lfn
-        print 'second__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
+        if useLogger:
+            lfn = self.logdir + cnow + '.log'
+            sys.stdout = Logger.Logger(fn=lfn)
+            print 'second__init__ Output directed to terminal and',lfn
+            print 'second__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
 
+        
+        
+        return
+    def init(self,LEDonly=False):
+        '''
+        one-time only initialization
+        '''
+        self.LEDonly = LEDonly
+        self.trigList = ['CT','M','LED']
+        if self.LEDonly: self.trigList = ['LED']
+
+        self.signalCtrs = ['S0','S1','S2','S3','S4','S5','S6','S7']
+        self.hodoCtrs   = ['H0','H1','H2','H3','H4','H5']
+        self.allCtrs    = self.signalCtrs
+        self.allCtrs.extend( self.hodoCtrs )
+
+        self.Run1 = self.Run2 = self.currentRun = None
+        
         # set time range for hists. taken from log files
         self.tStart = '12:05:49 01/11/16' # run537
         self.timeFormat = '%H:%M:%S %m/%d/%y'
-        self.tEnd   = now.strftime(self.timeFormat)
+        self.tEnd   = self.now.strftime(self.timeFormat)
 
         # for plotting time difference between triggers
         self.lastEventTime = {}
@@ -153,9 +161,7 @@ class second():
             print ''
         self.tKeys = tKeys
 
-        if self.LEDonly : print 'second__init__ ONLY PROCESS LED TRIGGERS',self.trigList
-        
-        
+        if self.LEDonly : print 'second.init ONLY PROCESS LED TRIGGERS',self.trigList
         return
     def open(self,fn):
         '''
@@ -622,41 +628,56 @@ class second():
         newlist = [x for y,x in sorted(zip(s1list,fnlist))]
         rlist.sort()
         return rlist[0],rlist[-1],newlist
+    def main(self,maxevt=9999999, LEDonly=False, inputFile=None):
+        '''
+        main module for second stage processing
+        INPUTS:
+        maxevt = max # of events to process PER INPUT FILE
+        LEDonly = True, process only LED triggers
+        inputFile is not None: process specified input file, otherwise create file list from datadir
+        OUTPUT:
+        root file name
+        
+        '''
+    
+        self.init(LEDonly=LEDonly)
+        if inputFile is not None:
+            fnlist = [ inputFile ]
+        else:
+            datadir = self.pip.fix( '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/' )
+            fnlist = self.P.getRawDataList(datadir)
+
+            #print 'before fnlist',fnlist
+
+            #fnlist = [ 'ReconCalibDataFiles/run600-run602.h5.gz' ] #### TEST GZIP
+            #fnlist = [ 'ForTesting/run600-run602.h5' ]  ##### TEST SOME FIGURES
+
+        # get first,last run numbers in file list and re-arrange list in run number order
+        self.Run1,self.Run2,newlist = self.getFirstLastRun(fnlist)
+        print 'first run#',self.Run1,'last run#',self.Run2
+        fnlist = newlist
+
+        #####fnlist = [ newlist[-1] ] ########### TEMPORARY
+
+        # root file name
+        rfn = self.pip.fix( self.parentDir + 'second.root' )
+        print 'second.main',len(fnlist),'files in input list'
+
+
+        self.book()
+        for fn in fnlist:
+            ok = self.open(fn)
+            if ok: 
+                self.loop(maxevt=maxevt)
+                self.close()
+        self.endroot(rfn)
+        return rfn
 if __name__ == '__main__' :
+    
     maxevt = 9999999
     LEDonly = False
     if len(sys.argv)>1: maxevt = int(sys.argv[1])
     if len(sys.argv)>2: LEDonly = True
 
-
-    S = second(LEDonly=LEDonly)
-    datadir = S.pip.fix( '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/' )
-    fnlist = S.P.getRawDataList(datadir)
-
-    #print 'before fnlist',fnlist
-
-    
-
-    #fnlist = [ 'ReconCalibDataFiles/run600-run602.h5.gz' ] #### TEST GZIP
-    #fnlist = [ 'ForTesting/run600-run602.h5' ]  ##### TEST SOME FIGURES
-
-    
-    # get first,last run numbers in file list and re-arrange list in run number order
-    S.Run1,S.Run2,newlist = S.getFirstLastRun(fnlist)
-    print 'first run#',S.Run1,'last run#',S.Run2
-    fnlist = newlist
-
-    #####fnlist = [ newlist[-1] ] ########### TEMPORARY
-
-    # root file name
-    rfn = S.pip.fix( S.parentDir + 'second.root' )
-    print 'second__main__',len(fnlist),'files in input list'
-
-
-    S.book()
-    for fn in fnlist:
-        ok = S.open(fn)
-        if ok: 
-            S.loop(maxevt=maxevt)
-            S.close()
-    S.endroot(rfn)
+    S = second(useLogger=True)
+    rfn = S.main(maxevt=maxevt,LEDonly=LEDonly)
