@@ -41,11 +41,12 @@ class writer():
     def closeFile(self):
         '''
         close currently open file
+        return name of file
         '''
-        n = self.f.filename
+        name = self.f.filename
         self.f.close()
-        print 'writer.closeFile closed',n
-        return
+        print 'writer.closeFile closed',name
+        return name
     def setRunNum(self,rn):
         '''
         set current run number
@@ -213,7 +214,7 @@ if __name__ == '__main__' :
     data = [ numpy.array([random.random() for x in range(3)]), numpy.array([random.gauss(0.,.1) for x in range(3)]) ]
     w.writeData(datalabel,data)
     
-    w.closeFile()
+    name = w.closeFile()
 
     w.show(fn)
     w.show(fn,'/Run/000387')

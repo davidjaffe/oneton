@@ -622,9 +622,13 @@ class second():
             if 'run' in s:
                 t = s.split('.')[0]
                 u = t.replace('run','')
-                s1,s2 = u.split('-')
-                rlist.extend( [ int(s1), int(s2) ] )
-                s1list.append( int(s1) )
+                if '-' in u:
+                    s1,s2 = u.split('-')
+                    rlist.extend( [ int(s1), int(s2) ] )
+                    s1list.append( int(s1) )
+                else:
+                    rlist.extend( [int(u), int(u) ] )
+                    s1list.append( int(u) )
         newlist = [x for y,x in sorted(zip(s1list,fnlist))]
         rlist.sort()
         return rlist[0],rlist[-1],newlist
