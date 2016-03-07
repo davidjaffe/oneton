@@ -126,9 +126,8 @@ class graphUtils():
         name  = g.GetName()
         if SetLogx: name += '_logx'
         if SetLogy: name += '_logy'
-        #slash = ''
-        #if len(figDir)>0 and figDir[-1]!='/': slash = '/'
-        if figDir[-1] != os.path.sep:
+
+        if len(figDir) > 0 and figDir[-1] != os.path.sep:
             pdf = self.pip.fix(figDir + '/' + name + '.pdf')
         else:
             pdf   = figDir + name + '.pdf'
