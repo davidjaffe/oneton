@@ -108,6 +108,7 @@ class process():
         '''
         X = self.Times
         Y = self.rawTemps
+
         title = 'raw temp vs time'
         name = title.replace(' ','_')
         graw = self.gU.makeTGraph(X,Y,title,name)
@@ -119,50 +120,60 @@ class process():
         tmg.Add(graw)
         tmg.Add(gcal)
         return [gcal,graw,tmg]
-    def finish(self,rfn='oneton.root'):
+    def finish(self,rfn='oneton.root',Draw=True):
         '''
         execute at end of job
         Print summary output
         close hdf5 output file, if necessary
         Open and fill ROOT file
-        Draw some hists
+        Draw some hists, if requested
         Delete all hists/trees in memory
         Print job timing stats
+        return name of hdf5 outfile, if it exists
         '''
-        self.R.summary()
-        if self.writeRecon: self.writer.closeFile()
-        
-        tvtgraphs  = self.makeTvTgraphs()
-        tvtmg = tvtgraphs[-1]
-        rf = TFile(rfn,"RECREATE")
+        evtsSeen = self.R.summary()
+        hdf5OutputFileName = None
+        if self.writeRecon:
+            hdf5OutputFileName = self.writer.closeFile()
         nwrite = 0
-        for h in self.Hists: rf.WriteTObject(self.Hists[h])
-        nwrite += len(self.Hists)
-        for h in self.WFHists: rf.WriteTObject(h)
-        nwrite += len(self.WFHists)
-        for g in tvtgraphs: rf.WriteTObject(g)
-        nwrite += len(tvtgraphs)
-        rf.Close()
+        if evtsSeen > 0:
+            tvtgraphs  = self.makeTvTgraphs()
+            tvtmg = tvtgraphs[-1]
+            rf = TFile(rfn,"RECREATE")
 
-        # draw selected hists
-        srun = self.getFilePrefix(rfn)
-        for ref in self.refTDCs:
-            s = []
-            for h in self.Hists:
-                if 'dTDC' in h and h[-2:]==ref:
-                    s.append(self.Hists[h])
+            for h in self.Hists: rf.WriteTObject(self.Hists[h])
+            nwrite += len(self.Hists)
+            for h in self.WFHists: rf.WriteTObject(h)
+            nwrite += len(self.WFHists)
+            for g in tvtgraphs: rf.WriteTObject(g)
+            nwrite += len(tvtgraphs)
+            rf.Close()
 
-            if len(s)>0:
-                s.sort()
-                self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
-        # draw temp vs time
-        #Skip drawing graphs for now if on windows.
-        if sys.platform != 'win32':
-            for g in tvtgraphs[0:-1]:
-                self.gU.fixTimeDisplay(g,showDate=True)
-                self.gU.color(g,2,2)
-                self.gU.drawGraph(g,figDir=self.figdir)
-            self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
+            if Draw:
+                # draw selected hists
+                srun = self.getFilePrefix(rfn)
+                for ref in self.refTDCs:
+                    s = []
+                    for h in self.Hists:
+                        if 'dTDC' in h and h[-2:]==ref:
+                            s.append(self.Hists[h])
+
+                    if len(s)>0:
+                        s.sort()
+                        self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
+
+                # draw temp vs time
+	        #Skip drawing graphs for now if on windows.
+        	if sys.platform != 'win32':
+                	for g in tvtgraphs[0:-1]:
+                    		self.gU.fixTimeDisplay(g,showDate=True)
+                    		self.gU.color(g,2,2)
+                    		self.gU.drawGraph(g,figDir=self.figdir)
+                	self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
+
+            else:
+                print 'process.finish Skip drawing hists and graphs'
+
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()
         print 'process.finish Wrote',nwrite,'objects to',rfn,'and deleted them from memory'
@@ -178,7 +189,7 @@ class process():
         dt = str(h)+'h'+str(m)+'m'+str(sc)
         print 'process.finish Job duration(s)',s,'or',dt
 
-        return True
+        return hdf5OutputFileName
     def bookHists(self,kind):
         '''
         book hists based on kind of data
@@ -852,14 +863,21 @@ if __name__ == '__main__' :
                       help="Just do temperature vs time analysis")
     parser.add_option("-Z","--UseCompression",default=None,type=str,
                       help="Use compression in creation of output hdf5 file. options=lzf,gzip [default %default]")
+    parser.add_option("--DoSPECalculation",action="store_true",
+                      help="Do SPE calculation")
 
     (options, args) = parser.parse_args(args=sys.argv)
-    print 'options',options
+    #print 'options',options
     nevt = options.Nevents
     dumpAll = options.DumpAll
     dumpThres=options.DumpThreshold
     dumpNZcode=options.DumpNonZeroWFDcode
     compalg = options.UseCompression
+
+    Draw = True
+    if options.DoSPECalculation:
+        print 'process.main Do SPE Calculation. Three stage job'
+        Draw = False # drawing sometimes causes seg fault
     
     
     P = process()
@@ -910,8 +928,22 @@ if __name__ == '__main__' :
             P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime,dumpNZcode=dumpNZcode)
             P.endRun()
             first = False
-    OK = P.finish(rfn=rfn)
+    hdf5OutputFileName = P.finish(rfn=rfn, Draw=Draw)
 
     print 'back in __main__'
+
+    # begin second stage of processing
+    if options.DoSPECalculation:
+        print '\n\n Begin second stage of processing for SPE calculation \n'
+        import second
+        S = second.second(useLogger=False)
+        outrfn = S.main(maxevt=nevt,LEDonly=True,inputFile=hdf5OutputFileName)
+
+        print '\n\n Begin third stage of processing for SPE calculation \n'
+        import spe_calc
+        SC = spe_calc.spe_calc(inputRFN=outrfn)
+        SC.main(drawEachFit=True,singleRunMode=True)
+
+        
 
     sys.exit('Normal exit')  ############EXIT EXIT EXIT ######################
