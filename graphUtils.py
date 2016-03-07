@@ -13,6 +13,7 @@ import ROOT
 from ROOT import TH1D, TFile, gROOT, TCanvas, TLegend, TGraph, TDatime, TMultiGraph, gStyle, TGraphErrors, TLine
 from array import array
 import re # regular expression
+import pipath
 
 class graphUtils():
     def __init__(self):
@@ -21,7 +22,7 @@ class graphUtils():
         self.goodColors.extend( [11, 12, 18] )
         self.goodColors.extend( [x for x in range(28,50)] )
         self.goodMarkers = [x for x in range(20,31) ]
-        
+        self.pip = pipath.pipath()        
         return
     
     def t2dt(self,t):
@@ -117,7 +118,7 @@ class graphUtils():
         if axis==3: nbins = h.GetNbinsZ()
         overflow = h.GetBinContent(nbins+1)
         return N,mean,stddev,underflow,overflow
-    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL'):
+    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False):
         '''
         output graph to file
         '''
@@ -125,10 +126,14 @@ class graphUtils():
         name  = g.GetName()
         if SetLogx: name += '_logx'
         if SetLogy: name += '_logy'
-        slash = ''
-        if len(figDir)>0 and figDir[-1]!='/': slash = '/'
-        pdf   = figDir + name + '.pdf'
-    
+        #slash = ''
+        #if len(figDir)>0 and figDir[-1]!='/': slash = '/'
+        if figDir[-1] != os.path.sep:
+            pdf = self.pip.fix(figDir + '/' + name + '.pdf')
+        else:
+            pdf   = figDir + name + '.pdf'
+        if verbose:
+            print('drawing Graph: ' + pdf)
         xsize,ysize = 1100,850 # landscape style
         noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
@@ -177,7 +182,7 @@ class graphUtils():
         
         canvas.Print(ps,'Landscape')
         os.system('ps2pdf ' + ps + ' ' + pdf)
-        if os.path.exists(pdf): os.system('rm ' + ps)
+        if os.path.exists(pdf): os.remove(ps)
 
         return
     def finishDraw(self,canvas,ps,pdf,setGrid=True,setTicks=True,ctitle=None):
@@ -201,7 +206,7 @@ class graphUtils():
         
         canvas.Print(ps,'Landscape')
         os.system('ps2pdf ' + ps + ' ' + pdf)
-        if os.path.exists(pdf): os.system('rm ' + ps)
+        if os.path.exists(pdf): os.remove(ps)
         return
     def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt=''):
         '''
@@ -231,21 +236,27 @@ class graphUtils():
                 else:
                     print 'graphUtils.drawMultiHists created',figdir
         # set output file name and canvas title
-        pdf = figdir
+        base = figdir        
         ctitle = None
         if fname!='':
-            pdf += fname
             ctitle = fname
         else:
             for h in histlist:
                 name = h.GetName()
-                pdf += name
-                if h!=histlist[-1]: pdf += '_'
+                ctitle += name
+                if h!=histlist[-1]:
+                    ctitle += '_'
 
-        if setLogx: pdf += '_logx'
-        if setLogy: pdf += '_logy'
-        ps = pdf + '.ps'
-        pdf += '.pdf'
+        if setLogx:
+            ctitle += '_logx'
+        if setLogy:
+            ctitle += '_logy'
+        if base[-1] != os.path.sep:
+            pdf = self.pip.fix(base + '/' + ctitle + '.pdf')
+            ps = self.pip.fix(base + '/' + ctitle + '.ps')
+        else:
+            pdf = base + ctitle + '.pdf'
+            ps = base + ctitle + '.ps'
         
         # open canvas, draw on it
         title = ''
@@ -279,9 +290,13 @@ class graphUtils():
         if debugMG: print 'graphUtils.drawMultiGraph',title,name,'TMG.GetListOfGraphs()',TMG.GetListOfGraphs(),'TMG.GetListOfGraphs().GetSize()',TMG.GetListOfGraphs().GetSize()
         nGraphs = TMG.GetListOfGraphs().GetSize()
 
+        if figdir[-1] != os.path.sep:
+            pdf = self.pip.fix(figdir + '/' + name + '.pdf')
+            ps = self.pip.fix(figdir + '/' + name + '.ps')
+        else:
+            pdf = figdir + name  + '.pdf'
+            ps  = figdir + name  + '.ps'
 
-        pdf = figdir + name  + '.pdf'
-        ps  = figdir + name  + '.ps'
         xsize,ysize = 1100,850 # landscape style
         noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
@@ -345,7 +360,7 @@ class graphUtils():
         else:
             canvas.Print(ps,'Landscape')
             os.system('ps2pdf ' + ps + ' ' + pdf)
-            if os.path.exists(pdf): os.system('rm ' + ps)
+            if os.path.exists(pdf): os.remove(ps)
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas
