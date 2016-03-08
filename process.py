@@ -55,17 +55,18 @@ class process():
             self.outputdir= parentDir + 'Output/'
             # create list of platform-independent path
             dirs = self.pip.fix( [parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir] )
+            parentDir, self.logdir, self.figdir, self.WFfigdir, self.TDCfigdir, self.outputdir = dirs
             for d in dirs:
                 if os.path.isdir(d):
                     pass
                 else:
                     try:
-                        os.mkdir(d)
+                        os.makedirs(d)
                     except IOError,e:
                         print 'process__init__',e
                     else:
                         print 'process__init__ created',d
-            lfn = self.logdir + cnow + '.log'
+            lfn = self.pip.fix( self.logdir + '/' + cnow + '.log' )
             sys.stdout = Logger.Logger(fn=lfn)
             print 'process__init__ Output directed to terminal and',lfn
             print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
@@ -592,11 +593,15 @@ class process():
                 L.SetLineStyle(2) # dashed
                 lines[cd].append( L )
 
-        pdf = fname #+ '_'+str(i)
-        if zoomPulse>-1: pdf += 'zoomPulse'+str(zoomPulse)
-        if figdir!='': pdf = figdir + pdf
-        ps = pdf + '.ps'
-        pdf= pdf + '.pdf'
+        path = fname #+ '_'+str(i)
+        if zoomPulse>-1: path += 'zoomPulse'+str(zoomPulse)
+        if figdir!='':
+            if figdir[-1] != os.path.sep:
+                path = self.pip.fix(figdir + '/' + path)
+            else:
+                path = figdir + path
+        ps = path + '.ps'
+        pdf= path + '.pdf'
         ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # no pop up
         xsize,ysize = 1100,850 # landscape style
         canvas = ROOT.TCanvas(pdf,fname,xsize,ysize)
@@ -628,7 +633,7 @@ class process():
             canvas.Modified()    
             canvas.Print(ps,'Landscape')
             os.system('ps2pdf ' + ps + ' ' + pdf)
-            if os.path.exists(pdf): os.system('rm ' + ps)
+            if os.path.exists(pdf): os.remove(ps)
         self.gU.finishDraw(canvas,ps,pdf,ctitle=fname)
         return
     def AinB(self,A,B):
@@ -918,6 +923,7 @@ if __name__ == '__main__' :
     f = sorted(fnlist)
     f1,f2 = P.getFilePrefix(f[0]),P.getFilePrefix(f[-1])
     rfn = P.outputdir
+    if len(rfn)>0 and rfn[-1]!=os.path.sep : rfn += os.path.sep # ensure dir name ends in separator
     g = [f1]
     if f1!=f2: g.append(f2)
     for q in g:

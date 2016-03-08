@@ -474,6 +474,7 @@ class reader():
         print ''
         return more
 if __name__ == '__main__' :
-    r = reader()
-    fn = '/Users/djaffe/work/1TonData/run462.h5'
-    r.first(fn=fn)
+    #r = reader()
+    #fn = '/Users/djaffe/work/1TonData/run462.h5'
+    #r.first(fn=fn)
+    print("directly calling data file reader object") # Lindsey likes this
