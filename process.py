@@ -31,6 +31,7 @@ class process():
 
         self.writeRecon = None
         self.overlaps = 0
+        self.lastEventDumped = None
         
         self.Hists = {}
         self.TDChistnames = {}
@@ -64,7 +65,7 @@ class process():
                         print 'process__init__',e
                     else:
                         print 'process__init__ created',d
-            lfn = self.pip.fix(self.logdir + '/' + cnow + '.log')
+            lfn = self.pip.fix( self.logdir + '/' + cnow + '.log' )
             sys.stdout = Logger.Logger(fn=lfn)
             print 'process__init__ Output directed to terminal and',lfn
             print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
@@ -163,13 +164,12 @@ class process():
                         self.gU.drawMultiHists(s,fname=srun+'_dTwrt'+ref,figdir=self.TDCfigdir,setLogy=True)
 
                 # draw temp vs time
-	        #Skip drawing graphs for now if on windows.
-        	if sys.platform != 'win32':
-                	for g in tvtgraphs[0:-1]:
-                    		self.gU.fixTimeDisplay(g,showDate=True)
-                    		self.gU.color(g,2,2)
-                    		self.gU.drawGraph(g,figDir=self.figdir)
-                	self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
+                if 0: #### DO NOT DRAW THESE GRAPHS. CAUSES PYTHON TO CRASH
+                    for g in tvtgraphs[0:-1]:
+                        self.gU.fixTimeDisplay(g,showDate=True)
+                        self.gU.color(g,2,2)
+                        self.gU.drawGraph(g,figDir=self.figdir)
+                    self.gU.drawMultiGraph(tvtmg,figdir=self.figdir,xAxisLabel='Time',yAxisLabel='Temperature (C)')
 
             else:
                 print 'process.finish Skip drawing hists and graphs'
@@ -269,16 +269,17 @@ class process():
                 for w in md:
                     name = tl + '_QDC_'+w
                     title = name.replace('_',' ')
-                    nx = 100
-                    xmi,xma = 0.,4100.
+                    nx = 4092
+                    xmi = 0.
+                    xma = xmi + float(nx)
                     #print 'process.bookHists name,title,nx,xmi,xma',name,title,nx,xmi,xma
                     Hists[name] = TH1D(name,title,nx,xmi,xma)
                     for r in ['lo','hi']: # lo=1,hi=0
                         name = tl+'_QDC'+r+'_'+w
                         title = name.replace('_',' ')
-                        nx = 100
-                        if r=='lo': xmi,xma = 0.,600.
-                        if r=='hi': xmi,xma = 500.,4100.
+                        nx = 4092
+                        if r=='lo': xmi,xma = 0.,float(nx)/8.
+                        if r=='hi': xmi,xma = 0.,float(nx)
                         Hists[name] = TH1D(name,title,nx,xmi,xma)
                 # 2-D summary hists
                 ny = len(md)
@@ -336,8 +337,12 @@ class process():
         if dumpAll: self.dumpCalib()
 
         self.evtCode = {}
+
+        integerKeys = []
+        for key in EvtDir.keys():
+            if key!='evt_table': integerKeys.append(key)
         
-        sEvtKeys = sorted(EvtDir.keys(),key=lambda b: int(b))
+        sEvtKeys = sorted(integerKeys,key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
             Event = EvtDir[evtkey]
             evtnum = int(evtkey)
@@ -350,7 +355,7 @@ class process():
 
             if dumpEvt:
                 self.dumpEvent(Event,evtnum)
-                if not dumpAll: self.evtDisplay(Event,evtnum)
+
 
                             
             missing = self.R.unpackEvent(Event)
@@ -366,7 +371,7 @@ class process():
                     if dumpAll or (dumpNZcode and wfdCode>0):
                         print 'process.eventLoop evtnum',evtnum,'wfdCode',wfdCode
                         self.dumpaWFD()
-                        self.evtDisplay(Event,evtnum)
+                        self.evtDisplay(Event,evtnum)  # must be called after analWFD
                         self.dumpEvent(Event,evtnum)
                 
                   
@@ -445,6 +450,16 @@ class process():
         print '++++++++++++++ end Calibration data dump ++++'
         return
     def dumpEvent(self,raw,evtnum):
+        '''
+        dump trigger info, unpacked data for an event
+        avoid duplicate dumps
+        '''
+        if self.lastEventDumped is not None:
+            if self.lastEventDumped==evtnum:
+                print 'process.dumpEvent evt#',evtnum,'has already been dumped.'
+                return
+        self.lastEventDumped = evtnum
+
         triggers = self.R.unpackTrigger(raw['TDC'])
         T = 'Triggers='
         for t in triggers: T += ' ' + t
@@ -498,6 +513,7 @@ class process():
         NX = 480
         XMI= 19.5
         XMA= XMI+float(NX)
+
             
         H = []
         self.hWFD = {}
@@ -526,7 +542,7 @@ class process():
                 h.SetLabelSize(2.*s,a)
         s = 'run'+str(self.R.getRunDetail('run'))+'evt'+str(evtnum)
 
-        self.diagnoseWFD(fname=s,figdir=self.WFfigdir)
+        self.diagnoseWFD(fname=s,figdir=self.WFfigdir,zoomPulse=0) # add 'zoom' on first pulse
         if 'WFD' in self.evtCode:
             if self.evtCode['WFD']>0 and mostPulses>-1:
                 for zP in range(mostPulses):
@@ -553,26 +569,26 @@ class process():
             h.SetStats(0)
             ped = V[0]
             L =  ROOT.TLine(xmi,ped,xma,ped)
-            L.SetLineColor(ROOT.kGreen)
+            L.SetLineColor(ROOT.kGreen) # solid green = global baseline
             lines[cd] = [ L ]
             pedsd = V[1]
             for x in [-1.,1.]:
                 y = ped+x*pedsd
                 L = ROOT.TLine(xmi,y,xma,y)
-                L.SetLineColor(ROOT.kGreen)
+                L.SetLineColor(ROOT.kGreen) # dashed green = +- rms on global baseline
                 L.SetLineStyle(3)
                 lines[cd].append( L )
             iPulse = V[2]
             for pair in iPulse:
                 for ib in pair:
                     L = ROOT.TLine(float(ib),ymi,float(ib),yma)
-                    L.SetLineColor(ROOT.kBlue)
+                    L.SetLineColor(ROOT.kBlue) # dotted blue = start, end of pulse
                     L.SetLineStyle(3) # dotted
                     lines[cd].append( L )
             pTime = V[5]
             for t in pTime:
                 L = ROOT.TLine(t,ymi,t,yma)
-                L.SetLineColor(ROOT.kRed)
+                L.SetLineColor(ROOT.kRed)   # dashed red = fitted time of pulse
                 L.SetLineStyle(2) # dashed
                 lines[cd].append( L )
 
@@ -906,6 +922,7 @@ if __name__ == '__main__' :
     f = sorted(fnlist)
     f1,f2 = P.getFilePrefix(f[0]),P.getFilePrefix(f[-1])
     rfn = P.outputdir
+    if len(rfn)>0 and rfn[-1]!=os.path.sep : rfn += os.path.sep # ensure dir name ends in separator
     g = [f1]
     if f1!=f2: g.append(f2)
     for q in g:

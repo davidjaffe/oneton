@@ -436,9 +436,13 @@ class second():
                 if trig=='CT' or trig=='LED':
                     timeCut = self.cutTimes[trig]
                     for x in WFDtime:
-                        for ts,areas in zip(WFDtime[x],WFDarea[x]):
-                            for t,a in zip(self.makeList(ts),self.makeList(areas)):
-                                if timeCut[x][0]<=t and t<=timeCut[x][1]:
+                        hits = 0
+                        ts    = [y for y in WFDtime[x]]
+                        areas = [y for y in WFDarea[x]]
+                        for t,a in zip(ts,areas):
+                            if timeCut[x][0]<=t and t<=timeCut[x][1]:
+                                hits += 1
+                                if hits==1:  # ONLY ACCEPT FIRST HIT
                                     name = trig + '_WFD_Area_tcut_'+x
                                     self.Hists[name].Fill(abs(a))
                                     if trig=='CT':
@@ -452,6 +456,7 @@ class second():
 
                                     name = trig + '_WFD_At_vs_run_'+x
                                     self.Hists[name].Fill(float(self.currentRun),abs(a))
+                        if 0 and hits>1: print 'second.analyze',trig,x,hits,'hits within time window',timeCut[x],'times',ts,'areas',areas,'WFDtime[x]',[y for y in WFDtime[x]],'WFDarea[x]',[y for y in WFDarea[x]]
 
         ### loop over triggers. plot events/trigger, QDC counts, Hodo timing
         for trig in triggers:
@@ -680,8 +685,10 @@ if __name__ == '__main__' :
     
     maxevt = 9999999
     LEDonly = False
+    inputFile = None
     if len(sys.argv)>1: maxevt = int(sys.argv[1])
     if len(sys.argv)>2: LEDonly = True
+    if len(sys.argv)>3: inputFile = sys.argv[3]
 
     S = second(useLogger=True)
-    rfn = S.main(maxevt=maxevt,LEDonly=LEDonly)
+    rfn = S.main(maxevt=maxevt,LEDonly=LEDonly,inputFile=inputFile)

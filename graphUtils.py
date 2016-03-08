@@ -22,7 +22,7 @@ class graphUtils():
         self.goodColors.extend( [11, 12, 18] )
         self.goodColors.extend( [x for x in range(28,50)] )
         self.goodMarkers = [x for x in range(20,31) ]
-        self.pip = pipath.pipath()        
+        self.pip = pipath.pipath()
         return
     
     def t2dt(self,t):
@@ -50,16 +50,25 @@ class graphUtils():
         if c==2: return time.strptime(day+text,fmt+"%H:%M:%S")
         sys.exit("graphUtils.convertTime ERROR Unknown input " + str(text))
         return
-    def fixTimeDisplay(self,g,showDate=False):
+    def fixTimeDisplay(self,g,showDate=False,maybeShowDate=True):
         '''
         set time axis to display nicely
         '''
         if g:
             g.GetXaxis().SetTimeDisplay(1)
             g.GetXaxis().SetTimeFormat("%H:%M")
-            if showDate: g.GetXaxis().SetTimeFormat("#splitline{%H:%M}{%y/%m/%d}")
+            if showDate:
+                g.GetXaxis().SetTimeFormat("#splitline{%H:%M}{%y/%m/%d}")
+            else:
+                if maybeShowDate:
+                    x1 = g.GetXaxis().GetXmin()
+                    x2 = g.GetXaxis().GetXmax()
+                    if x2-x1>24.*60.*60.:
+                        g.GetXaxis().SetTimeFormat("#splitline{%H:%M}{%y/%m/%d}")
+                        #print 'graphUtils.fixTimeDisplay: >1 day, so use splitline in SetTimeFormat'
             g.GetXaxis().SetNdivisions(-409)
             g.GetXaxis().SetLabelSize(0.025) #0.5*lx)
+            g.GetXaxis().SetTimeOffset(0,"local") # what does this do?
 #            g.GetXaxis().SetTimeOffset(0,"gmt") # using gmt option gives times that are only off by 1 hour on tgraph
         else:
             print 'graphUtils.fixTimeDisplay: WARNING Null pointer passed to fixTimeDisplay?????'
@@ -126,13 +135,13 @@ class graphUtils():
         name  = g.GetName()
         if SetLogx: name += '_logx'
         if SetLogy: name += '_logy'
-
         if len(figDir) > 0 and figDir[-1] != os.path.sep:
-            pdf = self.pip.fix(figDir + '/' + name + '.pdf')
+             pdf = self.pip.fix(figDir + '/' + name + '.pdf')
         else:
-            pdf   = figDir + name + '.pdf'
-        if verbose:
-            print('drawing Graph: ' + pdf)
+             pdf   = figDir + name + '.pdf'
+        if verbose: print 'drawing Graph:',pdf
+
+    
         xsize,ysize = 1100,850 # landscape style
         noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
@@ -152,22 +161,27 @@ class graphUtils():
         canvas.Update()
         canvas.Print(pdf,'pdf')
         return
-    def drawFit(self,h,figdir='',SetLogy=False,SetLogx=False):
+    def drawFit(self,h,figdir='',SetLogy=False,SetLogx=False,extraName=None):
         '''
         draw histogram with fit parameters
         '''
         name = h.GetName()
+        if extraName is not None: name += '_' + extraName
         title = h.GetTitle()
         if SetLogx: name += '_logx'
         if SetLogy: name += '_logy'
-        pdf = figdir + name + '.pdf'
-        ps  = figdir + name + '.ps'
+        if len(figdir)>0 and figdir[-1]!= os.path.sep:
+            pdf = self.pip.fix( figdir + '/' + name + '.pdf')
+            ps  = self.pip.fix( figdir + '/' + name + '.ps')
+        else:
+            pdf = figdir +  name + '.pdf' 
+            ps  = figdir +  name + '.ps' 
         xsize,ysize = 1100,850 # landscape style
         noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
         canvas = TCanvas(pdf,title,xsize,ysize)
         
-        gStyle.SetOptFit()
+        gStyle.SetOptFit(1111)
         h.Draw()
         if SetLogy: canvas.SetLogy(1)
         if SetLogx: canvas.SetLogx(1)
@@ -207,7 +221,7 @@ class graphUtils():
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return
-    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt=''):
+    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False):
         '''
         draw multiple histograms on single pdf output file
         '''
@@ -265,19 +279,38 @@ class graphUtils():
         canvas = TCanvas(pdf,title,xsize,ysize)
 
         gStyle.SetOptStat(statOpt)
-        canvas.Divide(nX,nY)
+        spaceBtwnPads = 0.01 / 1000.
+        canvas.Divide(nX,nY,spaceBtwnPads,spaceBtwnPads)
         for i,h in enumerate(histlist):
             canvas.cd(i+1).SetLogy(setLogy)
             canvas.cd(i+1).SetLogx(setLogx)
+            if abscissaIsTime : self.fixTimeDisplay(h)
+
             h.Draw(dopt)
+            self.biggerLabels(h)
+            if abscissaIsTime : self.fixTimeDisplay(h)
             #print i+1,h.GetName()
 
         self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
         return
+    def biggerLabels(self,h):
+        '''
+        increase axis label size
+
+        '''
+        factor = 2.0 # empirically determined
+        sx = h.GetXaxis().GetLabelSize()
+        h.GetXaxis().SetLabelSize(factor*sx)
+        sy = h.GetYaxis().GetLabelSize()
+        h.GetYaxis().SetLabelSize(factor*sy)
+
+        return
+        
     def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None):
         '''
         draw TMultiGraph with legend and output as pdf
         Default is that abscissa is calendar time.
+        Returns canvas
         
         '''
         debugMG = False
@@ -288,6 +321,7 @@ class graphUtils():
         if SetLogy: name += '_logy'
         if debugMG: print 'graphUtils.drawMultiGraph',title,name,'TMG.GetListOfGraphs()',TMG.GetListOfGraphs(),'TMG.GetListOfGraphs().GetSize()',TMG.GetListOfGraphs().GetSize()
         nGraphs = TMG.GetListOfGraphs().GetSize()
+
 
         if figdir[-1] != os.path.sep:
             pdf = self.pip.fix(figdir + '/' + name + '.pdf')
@@ -309,11 +343,14 @@ class graphUtils():
         x2 = x1 + .5
         y1 = 0.9
         y2 = y1 + .1
-        lg = TLegend(x1,y1,x2,y2) 
+        lg = TLegend(x1,y1,x2,y2)
+        NGraph = 0
         for g in TMG.GetListOfGraphs():
+            NGraph += 1
             t = g.GetTitle()
             lg.AddEntry(g, t, "LP" )
             if abscissaIsTime : self.fixTimeDisplay(g)
+        if NGraph>6: lg.SetNColumns(2)
 
         dOption = "AP"
         if drawLines: dOption += "L"
@@ -437,3 +474,36 @@ class graphUtils():
                     dy.append(g.GetErrorY(i))
         if getErrors: return x,y,dx,dy
         return x,y
+    def getTDatime(self,dt,fmt='%Y/%m/%d %H:%M:%S'):
+        '''
+        convert date/time text to TDatime object
+        '''
+        datetimeObj = self.getdatetime(dt,fmt=fmt)
+        return TDatime( datetimeObj.strftime('%Y-%m-%d %H:%M:%S') ).Convert()
+    def getdatetime(self,dt,fmt='%Y/%m/%d %H:%M:%S'):
+        ''' convert timestamp dt to text '''
+        return datetime.datetime.strptime(dt,fmt)
+    def reportHist(self,h):
+        '''
+        write out some properties of hist h
+        '''
+        name = h.GetName()
+        title = h.GetTitle()
+        xa = h.GetXaxis()
+        nx = xa.GetNbins()
+        xmi= xa.GetXmin()
+        xma= xa.GetXmax()
+        xex= xa.CanExtend()
+        nd = h.GetDimension()
+        words = 'graphUtils.reportHist',name,title,'nx,xmi,xma',nx,xmi,xma
+        if xex: words += 'can extend x-axis.'
+        if nd>1:
+            ya = h.GetYaxis()
+            ny = ya.GetNbins()
+            ymi= ya.GetXmin()
+            yma= ya.GetXmax()
+            yex= ya.CanExtend()
+            words += 'ny,ymi,yma=',ny,ymi,yma
+            if yex: words += 'can extend y-axis.'
+        print words
+        return
