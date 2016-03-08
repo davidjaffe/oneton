@@ -5,13 +5,14 @@ gaussian fitter
 
 import ROOT
 import math
+import numpy # for isclose
 
 class gfit():
     def __init__(self):
         print 'gfit initialized'
         self.sr2pi = math.sqrt(2.*math.pi)
         self.sr2   = math.sqrt(2.)
-        self.Nterm = 3
+
         return
 
     def fit(self,hname,nsigplus=1.5,nsigminus=2.0,debug=False,start_with_Chi2=False):
@@ -87,8 +88,8 @@ class gfit():
         bin1 = hname.GetBinContent(1)
         over  = hname.GetBinContent(hname.GetXaxis().GetNbins()+1)
         ent = tot - under - over 
-        xmi = hname.GetXaxis().GetXmin()
-        xma = hname.GetXaxis().GetXmax()
+        xlo = xmi = hname.GetXaxis().GetXmin()
+        xhi = xma = hname.GetXaxis().GetXmax()
 
         GoodFit = False
 
@@ -104,64 +105,88 @@ class gfit():
         fit_options = default_fit_opt # Restricted range,Likelihood,don't plot fit,quiet
         if start_with_Chi2:
             fit_options = default_fit_opt.replace("L","") # Restricted range,chi2,don't plot fit,quiet
-        nsig = 300.
+            
+
         mean = ave
         sgm  = rms
         mupois = 0.1
         if inputPar[0] is not None: ent    = inputPar[0]
-        if inputPar[1] is not None: mupois = inputPar[1]
+        if inputPar[1] is not None:
+            mupois = inputPar[1]
+            mean = ave/mupois
         if inputPar[2] is not None: mean   = inputPar[2]
         if inputPar[3] is not None: sgm    = inputPar[3]
-        for nsig in [300.]: #####[3., 2., -1.]:
-            xlo = max(xmi,mean - nsig*sgm)
-            xhi = min(xma,mean + nsig*sgm)
-            if nsig<0:
-                xlo = max(xmi,mean - nsigminus*sgm)
-                xhi = min(xma,mean + nsigplus*sgm)
-            if debug : print 'gfit.fitNGaus: prefit. mean,sgm, xlo,xhi',mean,sgm,xlo,xhi
-            g2 = ROOT.TF1("g2",self.NGaus,xlo,xhi,4)
 
-            g2.SetParameters( ent, mupois, mean, sgm)
-            g2.SetParNames( 'Const', 'mu', 'mean', 'sigma')
-            lo0,hi0  = inputLimits[0]
-            if lo0 is None: lo0 = 0.
-            if hi0 is None: hi0 = 10.*ent
-            g2.SetParLimits(0, lo0, hi0)
-            lo,hi = inputLimits[1]
-            if lo is None: lo = 1.e-4
-            if hi is None: hi = 1000.*mupois
-            g2.SetParLimits(1, lo, hi)
-            lo,hi = inputLimits[2]
-            if lo is None: lo = 0.
-            if hi is None: hi = 10.*ave
-            g2.SetParLimits(2, lo, hi)
-            lo3,hi3 =  inputLimits[3]
-            if lo3 is None: lo3 = 1.e-4
-            if hi3 is None: hi3 = 10.*rms
-            g2.SetParLimits(3, lo3, hi3)
-            
-            if noPopUp : ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
 
-            g2.FixParameter(3, sgm) # fix width of gaussian for first pass
-            g2.FixParameter(0, ent) # fix constant for first pass
-            hname.Fit("g2",fit_options) # first pass
-            
-            g2.SetParLimits(0, lo0, hi0) # constraint on constant
-            g2.SetParLimits(3, lo3, hi3) # constraint on width of gaussian
-            hname.Fit("g2",fit_options)  # second pass
-            
-            fit_options = default_fit_opt
-            c = g2.GetParameter(0)
-            mupois = g2.GetParameter(1)
-            mean = g2.GetParameter(2)
-            emean= g2.GetParError(2)
-            sg1  = g2.GetParameter(3)
-            prob = g2.GetProb()
-            if debug : print 'gfit.fitNGaus: name,nsig,mean,emean,sg1,prob,mupois',name,nsig,mean,emean,sg1,prob,mupois
+        g2 = ROOT.TF1("g2",self.NGaus,xlo,xhi,4)
+
+        g2.SetParameters( ent, mupois, mean, sgm)
+        g2.SetParNames( 'Const', 'mu', 'mean', 'sigma')
+        
+        lo0,hi0  = inputLimits[0]
+        if lo0 is None: lo0 = 0.
+        if hi0 is None: hi0 = 10.*ent
+        g2.SetParLimits(0, lo0, hi0)
+
+        lo,hi = inputLimits[1]
+        if lo is None: lo = 1.e-4
+        if hi is None: hi = min(10.,1000.*mupois)
+        g2.SetParLimits(1, lo, hi)
+
+        lo,hi = inputLimits[2]
+        if lo is None: lo = 0.
+        if hi is None: hi = 10.*mean
+        g2.SetParLimits(2, lo, hi)
+
+        lo3,hi3 =  inputLimits[3]
+        if lo3 is None: lo3 = 1.e-4
+        if hi3 is None: hi3 = 10.*sgm
+        g2.SetParLimits(3, lo3, hi3)
+
+        if noPopUp : ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
+
+        g2.FixParameter(3, sgm) # fix width of gaussian for first pass
+        g2.FixParameter(0, ent) # fix constant for first pass
+        hname.Fit("g2",fit_options) # first pass
+
+        g2.SetParLimits(0, lo0, hi0) # constraint on constant
+        g2.SetParLimits(3, lo3, hi3) # constraint on width of gaussian
+        hname.Fit("g2",fit_options)  # second pass
+
+        fit_options = default_fit_opt
+        c = g2.GetParameter(0)
+        mupois = g2.GetParameter(1)
+        mean = g2.GetParameter(2)
+        emean= g2.GetParError(2)
+        sg1  = g2.GetParameter(3)
+        prob = g2.GetProb()
+        if debug : print 'gfit.fitNGaus: name,nsig,mean,emean,sg1,prob,mupois',name,nsig,mean,emean,sg1,prob,mupois
             
         emean = g2.GetParError(2)
         GoodFit = True
+
+        # not a good fit if a parameter is at a limit
+        AtLimit = self.ParAtLimits(g2)
+        GoodFit = not any(x==True for x in AtLimit)
+        if debug:
+            print 'GoodFit=',GoodFit,
+            if not GoodFit:
+                for ipar in range(g2.GetNpar()):
+                    if AtLimit[ipar] : print  g2.GetParName( ipar), 'at limit',
+            print ''
+        
         return GoodFit,mean,emean, sg1, prob,mupois
+    def ParAtLimits(self,g):
+        '''
+        flag parameters that are at limits
+        '''
+        AtLimit = []
+        lo,hi = ROOT.Double(0.),ROOT.Double(0.)
+        for ipar in range(g.GetNpar()):
+            g.GetParLimits(ipar,lo,hi)
+            x = g.GetParameter(ipar)
+            AtLimit.append ( numpy.isclose(lo,x) or numpy.isclose(hi,x) )
+        return AtLimit
     def NGaus(self,v,p):
         '''
         4 parameter fit to sum of N gaussians
@@ -176,8 +201,9 @@ class gfit():
         sg1 = p[3]
         poisSum = 0.
         pois = math.exp(-mu)
+        Nterm = max(3,int(5.*mu))
         func = 0.
-        for i in range(self.Nterm):
+        for i in range(Nterm):
             n = float(i+1)
             pois *= mu/n
             poisSum += pois
@@ -207,34 +233,51 @@ class gfit():
         H.FillRandom("NG",int(p[0]))
         H.Draw()
         return H
-    def testFit(self,inputPoisMu=0.1,nevt=1000.):
+    def testFit(self,inputPoisMu=0.1,nevt=1000.,mode=0):
         '''
         test fitting with fake NGaus distributions
         '''
 
 
         IC, Imupois, Imean, Isg1 = p = [nevt, inputPoisMu, 50., 25.] # C, poisMu, gausMu, gausSG
-        IC, Imupois, Imean, Isg1 = p = [nevt, inputPoisMu, 50., 5.] # C, poisMu, gausMu, gausSG
+        IC, Imupois, Imean, Isg1 = p = [nevt, inputPoisMu, 30., 10.] # C, poisMu, gausMu, gausSG
         h = self.fakeNGaus(p)
+        name = h.GetName() + 'mode'+str(mode)
+        h.SetName(name)
+        print 'INPUT:  mupois',Imupois,'mean',Imean,'sigma',Isg1
         debug = False
         SwChi2= False
-        GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,debug=debug,start_with_Chi2=SwChi2)
-        print 'INPUT:  mupois',Imupois,'mean',Imean,'sigma',Isg1
-        print 'FREEFIT:mupois',mupois, 'mean', mean,'sigma',sg1
-        if 0:
-            GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, Imean, Isg1],debug=debug,start_with_Chi2=SwChi2)
-            print 'Con1FIT:mupois',mupois, 'mean', mean,'sigma',sg1
-            GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, Imean, None],debug=debug,start_with_Chi2=SwChi2)
-            print 'Con2FIT:mupois',mupois, 'mean', mean,'sigma',sg1
-            GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, None],debug=debug,start_with_Chi2=SwChi2)
-            print 'Con3FIT:mupois',mupois, 'mean', mean,'sigma',sg1
-            GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1],debug=debug,start_with_Chi2=SwChi2)
-            print 'Con4FIT:mupois',mupois, 'mean', mean,'sigma',sg1
+        if mode==0: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,debug=debug,start_with_Chi2=SwChi2)
+            
+        inputPar = [None, Imupois, Imean, Isg1]
+        if mode==1: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+            
+        inputPar = [None, Imupois, Imean, None]
+        if mode==2: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar=inputPar,debug=debug,start_with_Chi2=SwChi2)
+            
+        inputPar = [None, Imupois, None, None]
+        if mode==3: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+            
+        inputPar = [None, Imupois, None, Isg1]
+        if mode==4: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+
             
         inputLimits=[ [None,None], [1.e-4, 10.], [None,None], [.8*Isg1, 1.2*Isg1] ]
-        GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
-        print 'Con5FIT:mupois',mupois, 'mean', mean,'sigma',sg1
+        if mode==5: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
 
+        # tighter limit on mupois
+        inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.8*Isg1, 1.2*Isg1] ]
+        if mode==6: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
+
+        # looser limits on sigma
+        inputPar = [None, Imupois, None, Isg1]
+        inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.5*Isg1, 2.*Isg1] ]
+        if mode==7: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar, inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
+        
+            
+        print 'mode',mode,'mupois',mupois, 'mean', mean,'sigma',sg1
+
+        
         
         return h
 if __name__ == '__main__' :
@@ -242,12 +285,13 @@ if __name__ == '__main__' :
     hists = []
     ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
     for nevt in [1000.]:
-        for m in [0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5., 6.]:
-            G.Nterm = max(3,int(5.*m))
-            h = G.testFit(inputPoisMu=m,nevt=nevt)
-            print h.GetName()
-            if h in hists: print 'appending duplicate hist',h.GetName()
-            hists.append(h)
+        for m in [0.1, 0.5, 1.0, 2.0,  4.0,  6.]:
+
+            for mode in [ 4, 5,  7]:
+                h = G.testFit(inputPoisMu=m,nevt=nevt,mode=mode)
+                print h.GetName()
+                if h in hists: print 'appending duplicate hist',h.GetName()
+                hists.append(h)
     rfn = 'testGfit.root'
     rf = ROOT.TFile(rfn,"RECREATE")
     for h in hists: rf.WriteTObject(h)

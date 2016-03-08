@@ -153,19 +153,25 @@ class spe_calc():
                     py = h2.ProjectionY(pyName,jx,jx)
                     LEDevts = int(hepr.GetBinContent(jx))
                     Projevts= py.GetEntries()
-                    guessmupois = .1
+                    guessmupois,Qmi,Qma = .1,1.e-4,10.
                     print 'LEDevts',LEDevts,'Projevts',Projevts,
-                    if LEDevts>0: guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
+                    
+                    if LEDevts>0:
+                        guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
+                            
                     print 'guessmupois',guessmupois
-                    inputPar = [ None, guessmupois, 35., 15.]  # C, poisMu, gausMu, gausSG
-                    inputLim = [ [None,None], [1.e-4, min(10.,guessmupois*5)], [20., 50.], [1.e-3, 25.]]
+                    
+                    inputPar = [ None, guessmupois, None, 15.]  # C, poisMu, gausMu, gausSG
+                    
                     if Projevts>5: 
                         if FitFun=='NGaus':
-                            GoodFit,mean,emean, sgm, prob, mupois = self.GFIT.fitNGaus(py,debug=debug, inputPar=inputPar, inputLimits=inputLim)
+                            GoodFit,mean,emean, sgm, prob, mupois = self.GFIT.fitNGaus(py,debug=debug, inputPar=inputPar) 
                         else:
                             mupois = 1.
                             GoodFit,mean,emean, sgm, prob = self.GFIT.fit(py)
+                            
                         if debug: print 'ix,run#,GoodFit,mean,emean,sgm,prob {0} {6} {1} {2:.2f} {3:.2f} {4:.2f} {5:.3f}'.format(ix,GoodFit,mean,emean, sgm, prob, run)
+                            
                         if draw: self.gU.drawFit(py,figdir=self.figdir,extraName=str(run))
                         results[run] = [GoodFit,mean,emean,sgm,prob,mupois]
                     else:
