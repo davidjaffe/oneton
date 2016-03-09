@@ -68,16 +68,14 @@ class gfit():
         emean = g1.GetParError(1)
         GoodFit = True
         return GoodFit,mean,emean, sgm, prob
-    def fitNGaus(self,hname,nsigplus=1.5,nsigminus=2.0,debug=False,start_with_Chi2=False, inputPar=[None,0.1,None,None], inputLimits=[ [None,None], [None,None], [None,None], [None,None] ]):
+    def fitNGaus(self,hname,debug=False,start_with_Chi2=False, inputPar=[None,0.1,None,None], inputLimits=[ [None,None], [None,None], [None,None], [None,None] ]):
         '''
         return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with 
         function NGaus
         NOTE NUMBER OF RETURNED VARIABLES DIFFERS FROM gfit.fit
         may include: 
-        iterative  fit to hist hname
-        final fit is to range (nsigminus*sigma+mean,nsigplus*sigma+mean) with
-        log-likelihood where sigma and mean are results of previous iteration
-        fix normalization in fit
+        iterative fit to hist hname
+        fixed normalization in fit
         '''
         noPopUp = True
         
@@ -162,7 +160,7 @@ class gfit():
         emean= g2.GetParError(2)
         sg1  = g2.GetParameter(3)
         prob = g2.GetProb()
-        if debug : print 'gfit.fitNGaus: name,nsig,mean,emean,sg1,prob,mupois',name,nsig,mean,emean,sg1,prob,mupois
+        if debug : print 'gfit.fitNGaus: name,mean,emean,sg1,prob,mupois',name,mean,emean,sg1,prob,mupois
 
         emupois=g2.GetParError(1)
         emean = g2.GetParError(2)
@@ -183,13 +181,17 @@ class gfit():
     def ParAtLimits(self,g):
         '''
         flag parameters that are at limits
+        ignore fixed parameters
         '''
         AtLimit = []
         lo,hi = ROOT.Double(0.),ROOT.Double(0.)
         for ipar in range(g.GetNpar()):
-            g.GetParLimits(ipar,lo,hi)
-            x = g.GetParameter(ipar)
-            AtLimit.append ( numpy.isclose(lo,x) or numpy.isclose(hi,x) )
+            if g.GetParError(ipar)==0.:
+                AtLimit.append( False )
+            else:
+                g.GetParLimits(ipar,lo,hi)
+                x = g.GetParameter(ipar)
+                AtLimit.append ( numpy.isclose(lo,x) or numpy.isclose(hi,x) )
         return AtLimit
     def NGaus(self,v,p):
         '''

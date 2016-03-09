@@ -57,35 +57,41 @@ class spe_calc():
         if singleRunMode, do not create 'vs run' plots
         '''
         DebugRunLoop = False
-        
-        parNames = ['mean','emean','sigma','prob','mupois']
+        '''
+        order of variables returned by runLoop:
+          [GoodFit, mean,emean, sgm,esgm, mupois,emupois, prob]
+        '''
+        parNames = ['mean','emean','sigma','esigma','mupois','emupois','prob']
         pre = 'LED_WFD_At_vs_run_'
         postNames = ['S'+str(x) for x in range(6)]
         singleRun = -1
         
-        #postNames = ['S2','S3'] ############### TEMPORARY
         
         for icol,pN in enumerate(postNames):
             h2n = pre + pN
             print 'spe_calc.histLoop: Fit',h2n
             self.tableOfResults[pN] = results = self.runLoop(h2n,FitFun='NGaus',draw=drawEachFit,projName=pN+'_py',debug=DebugRunLoop,selectRun=selectRun)
-            X = sRuns = sorted( results.keys() )
-            eX= [0. for x in X]
-            print 'spe_calc.histLoop: Plot',h2n,'for',len(X),'runs'
-            if singleRunMode: singleRun = int(X[0])
+            
+            sRuns = sorted( results.keys() )
+            print 'spe_calc.histLoop: Plot',h2n,'for',len(sRuns),'runs for GoodFits'
+            if singleRunMode: singleRun = int(sRuns[0])
 
             if not singleRunMode:
 
                 for i,v in enumerate( parNames ):
+
                     j = i + 1
-                    Y = []
-                    eY= []
+                    Y,eY, X,eX = [],[],[],[]
                     for run in sRuns:
-                        Y.append( results[run][j] )
-                        if v=='mean':
-                            eY.append( results[run][j+1] )
-                        else:
-                            eY.append( 0. )
+                        GoodFit = results[run][0]
+                        if GoodFit:
+                            X.append( float(run) )
+                            eX.append( 0. )
+                            Y.append( results[run][j] )
+                            if v in ['mean','sigma','mupois']:
+                                eY.append( results[run][j+1] )
+                            else:
+                                eY.append( 0. )
 
                     name = 'SPE_'+v+'_vs_run_'+pN
                     title = name.replace('_',' ')
@@ -130,10 +136,10 @@ class spe_calc():
         h2 = self.Hists[h2n]
         hepr = self.evtsPerRunHist
         
-        print 'spe_calc.runLoop h2',h2
+        if debug: print 'spe_calc.runLoop h2',h2
         if h2 is None:
             h2 = self.getHist(h2n)
-            print 'spe_calc.runLoop try again h2',h2
+            if debug: print 'spe_calc.runLoop try again h2',h2
         pyName = "py"
         if projName is not None: pyName = projName
             
@@ -147,36 +153,34 @@ class spe_calc():
             jx = ix+1 # 1st bin = bin 1, last bin = bin nx. project from only a single bin
             if jx<=nx:
                 run = int(h2.GetXaxis().GetBinCenter(jx))
-                #print 'found run',run
+
                 if selectRun is None or run==selectRun:
-                    print 'spe_calc.runLoop processing run',run,'ix',ix,'jx',jx
+                    if debug: print 'spe_calc.runLoop processing run',run,'ix',ix,'jx',jx
                     py = h2.ProjectionY(pyName,jx,jx)
                     LEDevts = int(hepr.GetBinContent(jx))
                     Projevts= py.GetEntries()
-                    guessmupois,Qmi,Qma = .1,1.e-4,10.
-                    print 'LEDevts',LEDevts,'Projevts',Projevts,
-                    
-                    if LEDevts>0:
-                        guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
-                            
-                    print 'guessmupois',guessmupois
+                    if debug: print 'spe_calc.runLoop LEDevts',LEDevts,'Projevts',Projevts,
+                    guessmupois = .1
+                    if LEDevts>0: guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
+                    if debug: print 'guessmupois',guessmupois
                     
                     inputPar = [ None, guessmupois, None, 15.]  # C, poisMu, gausMu, gausSG
-                    
+                    GoodFit = False
                     if Projevts>5: 
                         if FitFun=='NGaus':
-                            GoodFit,mean,emean, sgm, prob, mupois = self.GFIT.fitNGaus(py,debug=debug, inputPar=inputPar) 
+                            GoodFit,mean,emean, sgm,esgm, mupois,emupois, prob = self.GFIT.fitNGaus(py,debug=debug, inputPar=inputPar) 
                         else:
                             mupois = 1.
+                            esgm = emupois = 0.
                             GoodFit,mean,emean, sgm, prob = self.GFIT.fit(py)
                             
-                        if debug: print 'ix,run#,GoodFit,mean,emean,sgm,prob {0} {6} {1} {2:.2f} {3:.2f} {4:.2f} {5:.3f}'.format(ix,GoodFit,mean,emean, sgm, prob, run)
+                        if debug: print 'ix,run#,GoodFit,mean,emean,sgm,esgm,mupois,emupois,prob {0} {1} {2:.3f} {4} {5:.2f} {6:.2f} {7:.2f} {8:.2f} {9:.2f}'.format(ix,run,prob,GoodFit,mean,emean, sgm,esgm, mupois,emupois)
                             
                         if draw: self.gU.drawFit(py,figdir=self.figdir,extraName=str(run))
-                        results[run] = [GoodFit,mean,emean,sgm,prob,mupois]
+                        results[run] = [GoodFit, mean,emean, sgm,esgm, mupois,emupois, prob]
                     else:
-                        results[run] = [False, -1., -1., -1., -1., -1.]
-                        
+                        results[run] = [GoodFit,   -1., -1.,   -1., -1., -1.,-1.,        -1.]
+                    print 'spe_calc.runLoop',h2.GetName(),'run',run,'evts',Projevts,'trigs',LEDevts,'GoodFit',GoodFit
         return results
     def getHists(self,rfn,debug=False):
         '''
