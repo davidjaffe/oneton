@@ -70,7 +70,7 @@ class gfit():
         return GoodFit,mean,emean, sgm, prob
     def fitNGaus(self,hname,nsigplus=1.5,nsigminus=2.0,debug=False,start_with_Chi2=False, inputPar=[None,0.1,None,None], inputLimits=[ [None,None], [None,None], [None,None], [None,None] ]):
         '''
-        return GoodFit (true/false), mean, emean, sgm1, prob of fit, mupois to hist hname with
+        return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with 
         function NGaus
         NOTE NUMBER OF RETURNED VARIABLES DIFFERS FROM gfit.fit
         may include: 
@@ -163,8 +163,10 @@ class gfit():
         sg1  = g2.GetParameter(3)
         prob = g2.GetProb()
         if debug : print 'gfit.fitNGaus: name,nsig,mean,emean,sg1,prob,mupois',name,nsig,mean,emean,sg1,prob,mupois
-            
+
+        emupois=g2.GetParError(1)
         emean = g2.GetParError(2)
+        esg1  = g2.GetParError(3)
         GoodFit = True
 
         # not a good fit if a parameter is at a limit
@@ -177,7 +179,7 @@ class gfit():
                     if AtLimit[ipar] : print  g2.GetParName( ipar), 'at limit',
             print ''
         
-        return GoodFit,mean,emean, sg1, prob,mupois
+        return GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob
     def ParAtLimits(self,g):
         '''
         flag parameters that are at limits
@@ -249,32 +251,32 @@ class gfit():
         print 'INPUT:  mupois',Imupois,'mean',Imean,'sigma',Isg1
         debug = False
         SwChi2= False
-        if mode==0: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,debug=debug,start_with_Chi2=SwChi2)
+        if mode==0: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, Imean, Isg1]
-        if mode==1: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==1: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, Imean, None]
-        if mode==2: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar=inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==2: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar=inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, None, None]
-        if mode==3: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==3: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, None, Isg1]
-        if mode==4: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==4: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
 
             
         inputLimits=[ [None,None], [1.e-4, 10.], [None,None], [.8*Isg1, 1.2*Isg1] ]
-        if mode==5: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
+        if mode==5: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
 
         # tighter limit on mupois
         inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.8*Isg1, 1.2*Isg1] ]
-        if mode==6: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
+        if mode==6: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob = self.fitNGaus(h,inputPar = [None, Imupois, None, Isg1], inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
 
         # looser limits on sigma
         inputPar = [None, Imupois, None, Isg1]
         inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.5*Isg1, 2.*Isg1] ]
-        if mode==7: GoodFit,mean,emean, sg1, prob,mupois = self.fitNGaus(h,inputPar = inputPar, inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
+        if mode==7: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar, inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
         
             
         print 'mode',mode,'mupois',mupois, 'mean', mean,'sigma',sg1
