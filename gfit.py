@@ -77,6 +77,7 @@ class gfit():
         iterative  fit to hist hname
         final fit is to range (nsigminus*sigma+mean,nsigplus*sigma+mean) with
         log-likelihood where sigma and mean are results of previous iteration
+        fix normalization in fit
         '''
         noPopUp = True
         
@@ -120,10 +121,11 @@ class gfit():
 
         g2 = ROOT.TF1("g2",self.NGaus,xlo,xhi,4)
 
+        # set parameters and limits
         g2.SetParameters( ent, mupois, mean, sgm)
         g2.SetParNames( 'Const', 'mu', 'mean', 'sigma')
         
-        lo0,hi0  = inputLimits[0]
+        lo0,hi0  = inputLimits[0]  # vestigial, normalization constant is fixed below
         if lo0 is None: lo0 = 0.
         if hi0 is None: hi0 = 10.*ent
         g2.SetParLimits(0, lo0, hi0)
@@ -146,10 +148,10 @@ class gfit():
         if noPopUp : ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
 
         g2.FixParameter(3, sgm) # fix width of gaussian for first pass
-        g2.FixParameter(0, ent) # fix constant for first pass
+        g2.FixParameter(0, ent) # fix constant for BOTH passes
         hname.Fit("g2",fit_options) # first pass
 
-        g2.SetParLimits(0, lo0, hi0) # constraint on constant
+
         g2.SetParLimits(3, lo3, hi3) # constraint on width of gaussian
         hname.Fit("g2",fit_options)  # second pass
 

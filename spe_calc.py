@@ -229,11 +229,12 @@ if __name__ == '__main__' :
     inputRootFileName = 'Second/20160304_214633_049558/second.root' # full processing, but >1 hit pb
     inputRootFileName = 'Second/20160308_093800_546984/second.root' # >1 hit pb fixed, runs1010-1019
 
-    inputRootFileName = 'Second/20160308_130649_412369/second.root' # run1010, after merge 20160308
+    #inputRootFileName = 'Second/20160308_130649_412369/second.root' # run1010, after merge 20160308
     
     SC = spe_calc(inputRFN=inputRootFileName)
 
     selectRun = 1010
+    selectRun = None
     singleRunMode = selectRun is not None
     drawEachFit = singleRunMode
     SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode)
