@@ -160,13 +160,13 @@ class spe_calc():
                     LEDevts = int(hepr.GetBinContent(jx))
                     Projevts= py.GetEntries()
                     if debug: print 'spe_calc.runLoop LEDevts',LEDevts,'Projevts',Projevts,
-                    guessmupois = .1
-                    if LEDevts>0: guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
-                    if debug: print 'guessmupois',guessmupois
-                    
-                    inputPar = [ None, guessmupois, None, 15.]  # C, poisMu, gausMu, gausSG
                     GoodFit = False
-                    if Projevts>5: 
+                    if LEDevts>100 and Projevts>5: 
+                        guessmupois = .1
+                        if LEDevts>0: guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
+                        if debug: print 'guessmupois',guessmupois
+
+                        inputPar = [ None, guessmupois, None, 15.]  # C, poisMu, gausMu, gausSG
                         if FitFun=='NGaus':
                             GoodFit,mean,emean, sgm,esgm, mupois,emupois, prob = self.GFIT.fitNGaus(py,debug=debug, inputPar=inputPar) 
                         else:
@@ -234,11 +234,11 @@ if __name__ == '__main__' :
     inputRootFileName = 'Second/20160308_093800_546984/second.root' # >1 hit pb fixed, runs1010-1019
 
     #inputRootFileName = 'Second/20160308_130649_412369/second.root' # run1010, after merge 20160308
-    
+    inputRootFileName = 'Second/20160309_110857_763170/second.root' # full processing runs 585-1346, 1hit pb fixed
     SC = spe_calc(inputRFN=inputRootFileName)
 
-    selectRun = 1010
-    selectRun = None
+    selectRun = 1162
+#    selectRun = None
     singleRunMode = selectRun is not None
     drawEachFit = singleRunMode
     SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode)

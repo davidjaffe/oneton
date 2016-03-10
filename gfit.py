@@ -171,7 +171,7 @@ class gfit():
         AtLimit = self.ParAtLimits(g2)
         GoodFit = not any(x==True for x in AtLimit)
         if debug:
-            print 'GoodFit=',GoodFit,
+            print 'gfit.FitNGaus',hname,'GoodFit=',GoodFit,
             if not GoodFit:
                 for ipar in range(g2.GetNpar()):
                     if AtLimit[ipar] : print  g2.GetParName( ipar), 'at limit',
