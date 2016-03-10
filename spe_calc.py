@@ -161,7 +161,7 @@ class spe_calc():
                     Projevts= py.GetEntries()
                     if debug: print 'spe_calc.runLoop LEDevts',LEDevts,'Projevts',Projevts,
                     GoodFit = False
-                    if LEDevts>100 and Projevts>5: 
+                    if LEDevts>100 and Projevts>5 and Projevts<LEDevts: 
                         guessmupois = .1
                         if LEDevts>0: guessmupois = -math.log(1. - float(Projevts)/float(LEDevts) )
                         if debug: print 'guessmupois',guessmupois
@@ -237,8 +237,8 @@ if __name__ == '__main__' :
     inputRootFileName = 'Second/20160309_110857_763170/second.root' # full processing runs 585-1346, 1hit pb fixed
     SC = spe_calc(inputRFN=inputRootFileName)
 
-    selectRun = 1162
-#    selectRun = None
+    selectRun = 1161
+    selectRun = None
     singleRunMode = selectRun is not None
     drawEachFit = singleRunMode
     SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode)
