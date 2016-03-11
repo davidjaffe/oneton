@@ -13,21 +13,34 @@ import math
 class cosmictele():
     def __init__(self):
         return
-    def doit(self,Nevt=100,zextrap=150.):
-        Nmeas = 4
+    def doit(self,Nevt=100,zextrap=150.,Nplane=1,dzplane2=100.):
+        Nlayers = 4
+        
+        Nmeas = Nlayers
         fNmeas= float(Nmeas)
         sig   = 1./math.sqrt(12.)
         y0 = 0.
         z0 = 0.
-        zv = zextrap+z0
+        zv = zextrap+z0 # Z-position to calculate Y based on measurements
         dz = 15./4. # separation between each measurement plane in z
-        Z = numpy.array([z0+float(i)*dz for i in range(Nmeas)])
+        Z = [z0+float(i)*dz for i in range(Nmeas)]
+        Z0plane = [Z[0]]
+        if Nplane==2:
+
+            Nmeas += Nlayers
+            Z.extend([z0+dzplane2+float(i)*dz for i in range(Nlayers)])
+            Z0plane.append(Z[Nlayers])
+                           
+        Z = numpy.array(Z)
         Sz = sum(Z)
         Szz= sum(Z*Z)
+        #print 'Z',Z
 
         yave = yrms = 0.
+        slope = slrms = 0.
         for e in range(Nevt):
             Y = numpy.random.normal(y0, sig, Nmeas)
+            #if e==0: print 'Y',Y
             Sy= sum(Y)
             Syz= sum(Y*Z)
             m = (fNmeas*Syz - Sy*Sz) / (fNmeas*Szz - Sz*Sz)
@@ -35,12 +48,27 @@ class cosmictele():
             y = m*zv + b
             yave += y
             yrms += y*y
+            slope += m
+            slrms += m*m
         yave = yave/float(Nevt)
         yrms = math.sqrt( (yrms-yave*yave)/float(Nevt-1) )
-        print 'Nevt,yave,yrms',Nevt,yave,yrms,'for zextrap',zextrap,'yrms/zextrap',yrms/zextrap,'z separation of planes',dz,'yres',sig
+        slope = slope/float(Nevt)
+        slrms = math.sqrt( (slrms-slope*slope)/float(Nevt-1) )
+        words = 'Nevt '+ str(Nevt)+' #planes '+str(Nplane)+' Z0plane '
+        words += ' '.join('%.3f'% x for x in Z0plane)
+        words += ' yave,yrms,zextrap '
+        words += ' '.join('%.3f'% x for x in [yave,yrms,zextrap])
+        words += 'yres {0:.3f}'.format(sig)
+        print words
+        #print '#planes',Nplane,'Z0plane',Z0plane,'Nevt,yave,yrms',Nevt,yave,yrms,'for zextrap',zextrap,'yrms/zextrap',yrms/zextrap,'z separation of planes',dz,'yres',sig
         return
 if __name__ == '__main__' :
 
     CT = cosmictele()
-    for z in [50., 100., 150., 200., 250.]:
-        CT.doit(Nevt=100000,zextrap=z)
+
+    for nplane in [1,2]:
+        dzplaneList = [0.]
+        if nplane==2: dzplaneList = [-100., 600., 1000., 151.]
+        for z in [50.,  150.,  250.]:
+            for dzplane in dzplaneList:
+                CT.doit(Nevt=100000,zextrap=z,Nplane=nplane,dzplane2=dzplane)
