@@ -643,7 +643,11 @@ class second():
         INPUTS:
         maxevt = max # of events to process PER INPUT FILE
         LEDonly = True, process only LED triggers
-        inputFile is not None: process specified input file, otherwise create file list from datadir
+        inputFile is not None: process specified input file or files,
+                  otherwise create file list from datadir.
+                  To input list of files, use comma-separated string with no spaces
+                  example is 'ReconCalibDataFiles/run1385-run1389.h5.gz,ReconCalibDataFiles/run1390-run1399.h5.gz,ReconCalibDataFiles/run1400-run1408.h5.gz'
+        
         OUTPUT:
         root file name
         
@@ -651,7 +655,10 @@ class second():
     
         self.init(LEDonly=LEDonly)
         if inputFile is not None:
-            fnlist = [ inputFile ]
+            if ',' in inputFile:
+                X = inputFile.split(',')
+                inputFile = X
+            fnlist = self.makeList( inputFile )
         else:
             datadir = self.pip.fix( '/Users/djaffe/work/GIT/ONETON/ReconCalibDataFiles/' )
             fnlist = self.P.getRawDataList(datadir)
