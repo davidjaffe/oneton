@@ -235,6 +235,9 @@ if __name__ == '__main__' :
 
     #inputRootFileName = 'Second/20160308_130649_412369/second.root' # run1010, after merge 20160308
     inputRootFileName = 'Second/20160309_110857_763170/second.root' # full processing runs 585-1346, 1hit pb fixed
+
+    inputRootFileName = 'Second/20160310_165505_691918/second.root' # first run# 1385 last run# 1408
+    
     SC = spe_calc(inputRFN=inputRootFileName)
 
     selectRun = 1161
