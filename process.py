@@ -814,13 +814,20 @@ class process():
         '''
         #f = fn.split('/')[-1]
         f = os.path.basename(fn) 
-        return f.split('.')[0]
-    def getRawDataList(self,rawDataDir):
+        return os.path.splitext(f)[0]#Won't fail on periods in the filename.
+    def getRawDataList(self,rawDataDir, H5Files=False):
         '''
         return list of full path name of files in rawDataDir
         cribbed from http://stackoverflow.com/questions/3207219/how-to-list-all-files-of-a-directory-in-python
         '''
-        onlyfiles = [os.path.join(rawDataDir,f) for f in os.listdir(rawDataDir) if os.path.isfile(os.path.join(rawDataDir, f))]
+        if H5Files:
+            ext = '.h5'
+        else:
+            ext = '.zip'
+        onlyfiles = [os.path.join(rawDataDir,f)
+            for f in os.listdir(rawDataDir)
+            if os.path.isfile(os.path.join(rawDataDir, f))
+            and os.path.splitext(f)[1]==ext]
         return onlyfiles
     def seeCalibData(self,rawDataDir):
         '''
@@ -881,6 +888,8 @@ if __name__ == '__main__' :
                       help="Use compression in creation of output hdf5 file. options=lzf,gzip [default %default]")
     parser.add_option("--DoSPECalculation",action="store_true",
                       help="Do SPE calculation")
+    parser.add_option("-F", "--H5Files", action="store_true", dest="H5Files", default=False,
+                      help="Option to process .h5 files (rather than zipped HDF5 files)")
 
     (options, args) = parser.parse_args(args=sys.argv)
     #print 'options',options
@@ -900,9 +909,12 @@ if __name__ == '__main__' :
     P.writeRecon = options.WriteRecon
 
     # get list of potential input files
-    rawDataDir = P.pip.fix("/Users/djaffe/work/1TonData/Filled_151217/")
+    if len(args) > 1:
+        rawDataDir = P.pip.fix(args[1])
+    else:
+        rawDataDir = os.getcwd()#Get current directory
     if options.MakeInputFileList: 
-        fnlist = P.getRawDataList(rawDataDir)
+        fnlist = P.getRawDataList(rawDataDir, options.H5Files)
     else:
         fnlist = P.defaultFileList()
 
@@ -923,6 +935,7 @@ if __name__ == '__main__' :
     f1,f2 = P.getFilePrefix(f[0]),P.getFilePrefix(f[-1])
     rfn = P.outputdir
     if len(rfn)>0 and rfn[-1]!=os.path.sep : rfn += os.path.sep # ensure dir name ends in separator
+    #Make filename for output    
     g = [f1]
     if f1!=f2: g.append(f2)
     for q in g:
