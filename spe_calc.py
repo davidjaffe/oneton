@@ -237,6 +237,7 @@ if __name__ == '__main__' :
     inputRootFileName = 'Second/20160309_110857_763170/second.root' # full processing runs 585-1346, 1hit pb fixed
 
     inputRootFileName = 'Second/20160310_165505_691918/second.root' # first run# 1385 last run# 1408
+    inputRootFileName = 'Second/20160311_184040_239400/second.root' # first runs 1409-1428
     
     SC = spe_calc(inputRFN=inputRootFileName)
 
@@ -244,5 +245,6 @@ if __name__ == '__main__' :
     selectRun = None
     singleRunMode = selectRun is not None
     drawEachFit = singleRunMode
+    drawEachFit = True #### TEMPORARY #####
     SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode)
     

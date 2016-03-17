@@ -70,8 +70,9 @@ class gfit():
         return GoodFit,mean,emean, sgm, prob
     def fitNGaus(self,hname,debug=False,start_with_Chi2=False, inputPar=[None,0.1,None,None], inputLimits=[ [None,None], [None,None], [None,None], [None,None] ]):
         '''
-        return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with 
-        function NGaus
+        return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with function NGaus
+        restrict range of fit from 1st bin to last bin with non-zero content to avoid
+        a spurious high prob due to good agreement with many zero bins
         NOTE NUMBER OF RETURNED VARIABLES DIFFERS FROM gfit.fit
         may include: 
         iterative fit to hist hname
@@ -85,17 +86,26 @@ class gfit():
         tot = hname.GetEntries()
         under = hname.GetBinContent(0)
         bin1 = hname.GetBinContent(1)
-        over  = hname.GetBinContent(hname.GetXaxis().GetNbins()+1)
+        nbins = hname.GetXaxis().GetNbins()
+        over  = hname.GetBinContent(nbins+1)
         ent = tot - under - over 
-        xlo = xmi = hname.GetXaxis().GetXmin()
-        xhi = xma = hname.GetXaxis().GetXmax()
+        xlo = hname.GetXaxis().GetXmin()
+        xhi = hname.GetXaxis().GetXmax()
+        binc = over
+        nzbin = nbins+1
+        while binc==0 and nzbin>0: # find 1st non-zero bin 
+            nzbin -= 1
+            binc = hname.GetBinContent(nzbin)
+        xhi = min(xhi,hname.GetBinCenter(min(nbins+1,nzbin+1)))
+
 
         GoodFit = False
 
         # reject hists with no entries or with too few entries
         # in the meaningful bins (>1 and <Nbin)
         if tot<=0 or float(ent)/float(tot)<0.50 :
-            return GoodFit, ave,rms, -1., -1.
+            return GoodFit, ave,rms, -1., -1., -1.,-1., -1.
+
 
         if debug :
             print 'gfit.fitNGaus: name,tot,under,bin1,over,ent',name,tot,under,bin1,over,ent
@@ -135,7 +145,7 @@ class gfit():
 
         lo,hi = inputLimits[2]
         if lo is None: lo = 0.
-        if hi is None: hi = 10.*mean
+        if hi is None: hi = min(xhi,10.*mean) # mean cannot be outside range of his
         g2.SetParLimits(2, lo, hi)
 
         lo3,hi3 =  inputLimits[3]
@@ -242,6 +252,9 @@ class gfit():
     def testFit(self,inputPoisMu=0.1,nevt=1000.,mode=0):
         '''
         test fitting with fake NGaus distributions
+
+        Studies of 20160307 show that best results for SPE fitting are obtained for mode==4:
+        guesses at mupois, sigma without externally specifying limits on parameters
         '''
 
 
@@ -265,7 +278,9 @@ class gfit():
         if mode==3: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, None, Isg1]
-        if mode==4: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==4:
+            #print 'mode',mode,'inputPar',inputPar,'debug',debug,'swChi2',SwChi2,'h',h
+            GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
 
             
         inputLimits=[ [None,None], [1.e-4, 10.], [None,None], [.8*Isg1, 1.2*Isg1] ]
@@ -293,7 +308,8 @@ if __name__ == '__main__' :
     for nevt in [1000.]:
         for m in [0.1, 0.5, 1.0, 2.0,  4.0,  6.]:
 
-            for mode in [ 4, 5,  7]:
+            for mode in [ 4]:   # , 5,  7]:
+                #print 'm,nevt,mode',m,nevt,mode
                 h = G.testFit(inputPoisMu=m,nevt=nevt,mode=mode)
                 print h.GetName()
                 if h in hists: print 'appending duplicate hist',h.GetName()

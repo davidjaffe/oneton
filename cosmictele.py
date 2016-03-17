@@ -9,9 +9,55 @@ import numpy
 #import ROOT
 #from ROOT import TFile,TH1D,TH2D,gDirectory
 import math
+import sys
 
 class cosmictele():
     def __init__(self):
+        # see notes 20160314 (back of 20160204/3)
+        self.zTop        = 184.48 # height of active volume above floor
+        self.zHeight     = 125.0  # height of active volume
+        self.dzFloor     = 350.   # assumed height of a floor
+        self.zCSC1TozTop = 59.48
+        self.zCSC2ceiling = self.zCSC1TozTop + 100.
+        self.zCSC1first   = self.zCSC1TozTop - (self.zTop + self.dzFloor)
+        self.zCSC1basement= self.zCSC1TozTop - (self.zTop + 2.*self.dzFloor)
+        
+        return
+    def pathAngle(self,d=99.5,h=125.,tC=math.acos(1./1.33)):
+        '''
+        CSC is 15cm high
+        compute position of track at top of each CSC
+        assume CSC on top of dark box
+        2d CSC either under ceiling, on 1st floor, in basement
+        # assumes 350cm/floor
+        '''
+        #        dark
+        #        box    under 
+        #        top    ceiling      on 1st floor         in basement
+        CSCdz = []
+        CSCdz.append( self.zCSC1TozTop )   # top of CSC at top of dark box
+        CSCdz.append( self.zCSC2ceiling )  # under 2d floor ceiling
+        CSCdz.append( self.zCSC1first )    # on 1st floor 
+        CSCdz.append( self.zCSC1basement ) # in basement
+        words = ' '.join('%10.1f' % x for x in CSCdz)
+        words += ' (cm) relative to top of active 1ton volume'
+        print '{0:>45} {1:}'.format('',words)
+        print '{0:5} {1:5} {2:10} {3:10} {4:>10} {5:>10} {6:>10} {6:>10} {6:>10}'.format('x','y','theta(rad)','theta(deg)','path(cm)','CSC1r0','CSC2r0')
+        fractions = [1./4., 1./3., 0.4]
+        
+        for fx in fractions:
+            x = fx*d
+            for fy in fractions:
+                y = fy*d
+                theta = math.atan( h/(d-(x+y)) ) - (math.pi/2.-tC)
+                l = x/math.sin(theta)
+                print '{0:5.2f} {1:5.2f} {2:10.3f} {3:10.1f} {4:10.1f}'.format(x,y,theta,theta*180./math.pi,l),
+                for c in CSCdz:
+                    g = c*math.tan(theta)
+                    dz = d/2. - (x+g)
+                    print ' {0:>10.1f}'.format(dz),
+                print ''
+                #print 'fx,fy,theta(rad),theta(deg),mupath',fx,fy,theta,theta*180/math.pi,l
         return
     def doit(self,Nevt=100,zextrap=150.,Nplane=1,dzplane2=100.):
         Nlayers = 4
@@ -72,13 +118,21 @@ class cosmictele():
         #print '#planes',Nplane,'Z0plane',Z0plane,'Nevt,yave,yrms',Nevt,yave,yrms,'for zv',zv,'yrms/zextrap',yrms/zextrap,'z separation of planes',dz,'yres',sig
         return
 if __name__ == '__main__' :
+    mode = 0
+    if len(sys.argv)>0 : mode=int(sys.argv[1])
 
+    
     CT = cosmictele()
 
-    for nplane in [1,2]:
-        dzplaneList = [0.]
-        if nplane==2: dzplaneList = [-100., 600., 1000.]
-        for z in [50.,  150.,  250.]:
-            print ''
-            for dzplane in dzplaneList:
-                CT.doit(Nevt=100000,zextrap=z,Nplane=nplane,dzplane2=dzplane)
+    if mode==0 or mode==2:
+
+        for nplane in [1,2]:
+            dzplaneList = [0.]
+            if nplane==2: #dzplaneList = [-100., 600., 1000.]
+                dzplaneList = [-(CT.zCSC2ceiling - CT.zCSC1TozTop),  -(CT.zCSC1first - CT.zCSC1TozTop), -(CT.zCSC1basement- CT.zCSC1TozTop)]
+            for z in [CT.zCSC1TozTop, CT.zCSC1TozTop+CT.zHeight]:
+                print ''
+                for dzplane in dzplaneList:
+                    CT.doit(Nevt=100000,zextrap=z,Nplane=nplane,dzplane2=dzplane)
+    if mode==1 or mode==2:
+        CT.pathAngle(h=CT.zHeight)
