@@ -294,7 +294,12 @@ class gfit():
         inputPar = [None, Imupois, None, Isg1]
         inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.5*Isg1, 2.*Isg1] ]
         if mode==7: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar, inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
-        
+
+        # like mode=4, but don't use input sigma
+        inputPar = [None, Imupois, None, 15.]
+        if mode==8:
+            #print 'mode',mode,'inputPar',inputPar,'debug',debug,'swChi2',SwChi2,'h',h
+            GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         print 'mode',mode,'mupois',mupois, 'mean', mean,'sigma',sg1
 
@@ -305,10 +310,10 @@ if __name__ == '__main__' :
     G = gfit()
     hists = []
     ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
-    for nevt in [1000.]:
+    for nevt in [100., 1000.]:
         for m in [0.1, 0.5, 1.0, 2.0,  4.0,  6.]:
 
-            for mode in [ 4]:   # , 5,  7]:
+            for mode in [ 4, 8]:   # , 5,  7]:
                 #print 'm,nevt,mode',m,nevt,mode
                 h = G.testFit(inputPoisMu=m,nevt=nevt,mode=mode)
                 print h.GetName()
