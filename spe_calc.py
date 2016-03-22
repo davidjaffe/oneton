@@ -43,6 +43,7 @@ class spe_calc():
         self.Hists = {}
         self.Graphs = {}
         self.tableOfResults = {}
+        self.projHists = {}
 
         self.evtsPerRunHistName = 'LED_events_per_run'
         self.evtsPerRunHist = None
@@ -50,7 +51,7 @@ class spe_calc():
         print 'spe_calc.__init__ ROOT files: input',self.rfn,'output',self.outrfn
 
         return
-    def histLoop(self,drawEachFit=False,singleRunMode=False,selectRun=None):
+    def histLoop(self,drawEachFit=False,singleRunMode=False,selectRun=None,saveProj=False):
         '''
         loop over histograms of spe distribution vs run, fit and plot mean, sigma, etc. vs run
         if drawEachFit, then separate output file showing each fit is draw
@@ -62,6 +63,7 @@ class spe_calc():
           [GoodFit, mean,emean, sgm,esgm, mupois,emupois, prob]
         '''
         parNames = ['mean','emean','sigma','esigma','mupois','emupois','prob']
+        XYpairs  = [ ['prob','mean'], ['prob','sigma'], ['prob','mupois'], ['mupois','mean'] ]
         pre = 'LED_WFD_At_vs_run_'
         postNames = ['S'+str(x) for x in range(6)]
         singleRun = -1
@@ -70,7 +72,7 @@ class spe_calc():
         for icol,pN in enumerate(postNames):
             h2n = pre + pN
             print 'spe_calc.histLoop: Fit',h2n
-            self.tableOfResults[pN] = results = self.runLoop(h2n,FitFun='NGaus',draw=drawEachFit,projName=pN+'_py',debug=DebugRunLoop,selectRun=selectRun)
+            self.tableOfResults[pN] = results = self.runLoop(h2n,FitFun='NGaus',draw=drawEachFit,projName=pN+'_py',debug=DebugRunLoop,selectRun=selectRun,saveProj=saveProj)
             
             sRuns = sorted( results.keys() )
             print 'spe_calc.histLoop: Plot',h2n,'for',len(sRuns),'runs for GoodFits'
@@ -78,7 +80,7 @@ class spe_calc():
 
             if not singleRunMode:
 
-                for i,v in enumerate( parNames ):
+                for i,v in enumerate( parNames ):  # parameters vs run
 
                     j = i + 1
                     Y,eY, X,eX = [],[],[],[]
@@ -97,12 +99,35 @@ class spe_calc():
                     title = name.replace('_',' ')
                     g = self.Graphs[name] = self.gU.makeTGraph(X,Y,title,name,ex=eX,ey=eY)
                     self.gU.color(g,icol,icol,setMarkerColor=True)
+                    
+                for pair in XYpairs:    # parameter vs parameter
+                    xpair,ypair = pair
+                    ix = parNames.index(xpair)+1
+                    iex,iey = -1,-1
+                    if 'e'+xpair in parNames: iex = parNames.index('e'+xpair)+1
+                    iy = parNames.index(ypair)+1
+                    if 'e'+ypair in parNames: iey = parNames.index('e'+ypair)+1
+                    X,eX,Y,eY = [],[],[],[]
+                    for run in sRuns:
+                        GoodFit = results[run][0]
+                        if GoodFit:
+                            X.append( results[run][ix] )
+                            Y.append( results[run][iy] )
+                            if iex>0: eX.append( results[run][iex] )
+                            else:     eX.append( 0. )
+                            if iey>0: eY.append( results[run][iey] )
+                            else:     eY.append( 0. )
+                    name = 'SPE_'+ypair+'_vs_'+xpair+'_'+pN
+                    title = name.replace('_',' ')
+                    g = self.Graphs[name] = self.gU.makeTGraph(X,Y,title,name,ex=eX,ey=eY)
+                    self.gU.color(g,icol,icol,setMarkerColor=True)
 
         if not singleRunMode:
             for parName in parNames:
                 name = parName + '_vs_run'
                 tmg = self.gU.makeTMultiGraph(name)
-                ss = '_' + parName + '_'
+                ss = '_vs_' + parName + '_'
+                ss = '_' +  parName + '_vs_run_'
 
                 for gname in sorted( self.Graphs.keys() ) :
                     if ss in gname: tmg.Add( self.Graphs[gname] )
@@ -126,9 +151,10 @@ class spe_calc():
                 
         return
         
-    def runLoop(self,h2n,FitFun='NGaus',draw=False,debug=False,projName=None,selectRun=None):
+    def runLoop(self,h2n,FitFun='NGaus',draw=False,debug=False,projName=None,selectRun=None,saveProj=False):
         '''
         loop over xbins in 2d hist, making projections and fitting them
+        if saveProj, then give projections unique names and save them in output root file
         '''
 
         if selectRun is not None: print 'spe_calc.runLoop selectRun',selectRun
@@ -156,7 +182,9 @@ class spe_calc():
 
                 if selectRun is None or run==selectRun:
                     if debug: print 'spe_calc.runLoop processing run',run,'ix',ix,'jx',jx
+                    if saveProj: pyName = projName + '_'+str(run)
                     py = h2.ProjectionY(pyName,jx,jx)
+                    if saveProj: self.projHists[pyName] = py
                     LEDevts = int(hepr.GetBinContent(jx))
                     Projevts= py.GetEntries()
                     if debug: print 'spe_calc.runLoop LEDevts',LEDevts,'Projevts',Projevts,
@@ -208,7 +236,7 @@ class spe_calc():
     def getHist(self,hn):
         hist = self.rf.Get(hn)
         return hist
-    def main(self,drawEachFit=False,singleRunMode=False,selectRun=None):
+    def main(self,drawEachFit=False,singleRunMode=False,selectRun=None,saveProj=False):
         '''
         main module
         '''
@@ -218,12 +246,16 @@ class spe_calc():
         self.evtsPerRunHist = self.getHist( self.evtsPerRunHistName) 
 
         print 'spe_calc.main drawEachFit = ',drawEachFit
-        self.histLoop(drawEachFit=drawEachFit,singleRunMode=singleRunMode,selectRun=selectRun)
+        self.histLoop(drawEachFit=drawEachFit,singleRunMode=singleRunMode,selectRun=selectRun,saveProj=saveProj)
 
         outrf = TFile(self.outrfn,'RECREATE')
         for g in self.Graphs: outrf.WriteTObject( self.Graphs[g] )
+        nh = 0
+        if saveProj:
+            nh = len(self.projHists)
+            for h in self.projHists: outrf.WriteTObject( self.projHists[h] )
         outrf.Close()
-        print 'Wrote',len(self.Graphs),'objects to',self.outrfn
+        print 'Wrote',len(self.Graphs)+nh,'objects to',self.outrfn
         return
 if __name__ == '__main__' :
     #h2n = 'LED_WFD_At_vs_run_S0'
@@ -245,6 +277,6 @@ if __name__ == '__main__' :
     selectRun = None
     singleRunMode = selectRun is not None
     drawEachFit = singleRunMode
-    drawEachFit = True #### TEMPORARY #####
-    SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode)
+    saveProj = True
+    SC.main(drawEachFit=drawEachFit,selectRun=selectRun,singleRunMode=singleRunMode,saveProj=saveProj)
     
