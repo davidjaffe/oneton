@@ -119,7 +119,7 @@ class cosmictele():
         return
 if __name__ == '__main__' :
     mode = 0
-    if len(sys.argv)>0 : mode=int(sys.argv[1])
+    if len(sys.argv)>1 : mode=int(sys.argv[1])
 
     
     CT = cosmictele()
