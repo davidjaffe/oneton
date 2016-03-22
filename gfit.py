@@ -122,7 +122,7 @@ class gfit():
         if inputPar[0] is not None: ent    = inputPar[0]
         if inputPar[1] is not None:
             mupois = inputPar[1]
-            mean = ave/mupois
+            mean = ave/max(1.,mupois)
         if inputPar[2] is not None: mean   = inputPar[2]
         if inputPar[3] is not None: sgm    = inputPar[3]
 
@@ -157,10 +157,11 @@ class gfit():
 
         g2.FixParameter(3, sgm) # fix width of gaussian for first pass
         g2.FixParameter(0, ent) # fix constant for BOTH passes
+        if debug: self.reportPar(g2,words='gfit.fitNGaus before 1st fit:')
         hname.Fit("g2",fit_options) # first pass
 
-
         g2.SetParLimits(3, lo3, hi3) # constraint on width of gaussian
+        if debug: self.reportPar(g2,words='gfit.fitNGaus after 1st fit:')
         hname.Fit("g2",fit_options)  # second pass
 
         fit_options = default_fit_opt
@@ -188,6 +189,18 @@ class gfit():
             print ''
         
         return GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob
+    def reportPar(self,g,words=None):
+        '''
+        report parameters and limits
+        '''
+        lo,hi = ROOT.Double(0.),ROOT.Double(0.)
+        if words is not None: print words,
+        for ipar in range(g.GetNpar()):
+            g.GetParLimits(ipar,lo,hi)
+            x = g.GetParameter(ipar)
+            print g.GetParName(ipar),x,'limits',lo,hi,
+        print ''
+        return
     def ParAtLimits(self,g):
         '''
         flag parameters that are at limits
