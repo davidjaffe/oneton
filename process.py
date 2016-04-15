@@ -19,6 +19,7 @@ import calibThermocouple
 import writer
 from optparse import OptionParser
 import pipath
+import SaveAllEvts
 
 class process():
     def __init__(self,makeDirs=True):
@@ -40,6 +41,8 @@ class process():
         self.Times = []
         self.rawTemps = []
         self.calTemps = []
+        self.AllTrigsfname = None
+        self.rootpyEvts = None
 
         if makeDirs:
             now = datetime.datetime.now()
@@ -71,10 +74,18 @@ class process():
             print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
 
         return
-    def start(self):
+    def start(self, StoreAllTriggers=False):
         self.bookHists('TDC')
         self.bookHists('QDC')
         self.bookHists('WFD')
+        if StoreAllTriggers:
+            self.InitTree()
+        return
+    def InitTree(self):
+        if self.AllTrigsfname is None:
+            print('process.InitTree: the filename has not been defined!')
+            return
+        self.rootpyEvts = SaveAllEvts.rootpyEvts(self.AllTrigsfname)
         return
     def startRun(self,file=None,tG=False):
         '''
@@ -136,6 +147,10 @@ class process():
         hdf5OutputFileName = None
         if self.writeRecon:
             hdf5OutputFileName = self.writer.closeFile()
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.rfile.Write()
+            self.rootpyEvts.rfile.Close()
+
         nwrite = 0
         if evtsSeen > 0:
             tvtgraphs  = self.makeTvTgraphs()
@@ -324,7 +339,8 @@ class process():
         else:
             print 'process.bookHists Invalid input',kind
         return
-    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,dumpNZcode=False,timeTempOnly=True):
+    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,
+                  dumpNZcode=False,timeTempOnly=True,StoreAllTriggers=False):
         '''
         loop over events in order of increasing event number
         '''
@@ -338,12 +354,16 @@ class process():
 
         self.evtCode = {}
 
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.rnum = self.R.RunNumber
+            
         integerKeys = []
         for key in EvtDir.keys():
             if key!='evt_table': integerKeys.append(key)
         
         sEvtKeys = sorted(integerKeys,key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
+            
             Event = EvtDir[evtkey]
             evtnum = int(evtkey)
             if evtnum>maxEvt: break
@@ -407,9 +427,61 @@ class process():
                 EN = self.writer.writeEvent(label,data,evtNo=evtnum)
                 label,data = 'Temp',self.aTemp
                 EN = self.writer.writeEvent(label,data,evtNo=evtnum)
-                                    
-                    
+            
+            if self.rootpyEvts is not None:
+                thetree = self.rootpyEvts.tree
+                thetree.evtnum = int(evtkey)
+                thetree.temp = Event['Event_Temp'].value
+                thetree.time = Event['Event_Time'].value
+                thetree.QDC1 = [ch[1] for ch in Event['QDC_1']]
+                thetree.QDC2 = [ch[1] for ch in Event['QDC_2']]
+                thetree.TDCnumch = len(Event['TDC'])
 
+                for i in range(len(Event['TDC'])):
+                    thetree.TDCch[i] = Event['TDC'][i][0]
+                    thetree.TDCval[i] = Event['TDC'][i][1]
+                
+                if not timeTempOnly:
+                    #note: channel names are assumed to be sampled from:
+                    # ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
+                    #self.aWFD[channel name] goes like prenames:
+                    #[pedestal, pedestal stdev, npulse, nsubp, area, time]
+                    #I'm not sure what npulse and nsubp are, so I'm skipping them.
+                    thekeys = [k for k in self.aWFD.keys()
+                                if k is not 'RunEventNumber'
+                                and k is not 'prenames']
+                    for k in thekeys:
+                        areas = [0]*32
+                        times = [0]*32
+                        theidx = int(k[1])
+                        thetree.WFDped[theidx] = self.aWFD[k][0]
+                        thetree.WFDpedsd[theidx] = self.aWFD[k][1]
+                        for i in range(len(self.aWFD[k][4])):
+                            areas[i] = self.aWFD[k][4][i]
+                            times[i] = self.aWFD[k][5][i]
+                        setattr(thetree, k+'_area', areas)
+                        setattr(thetree, k+'_time', times)
+
+                self.rootpyEvts.tree.Fill()
+                self.reinitROOTf()                    
+        return
+
+    def reinitROOTf(self):
+        '''
+        This function reinitializes the root tree and should be called after
+        filling the tree.
+        '''
+        thetree = self.rootpyEvts.tree
+        thetree.TDCch = [0]*16
+        thetree.TDCval = [0]*16
+        thetree.QDC1 = [0]*16
+        thetree.QDC2 = [0]*16
+        thetree.WFDped = [0]*8
+        thetree.WFDpedsd = [0]*8        
+        for i in range(8):
+            prefix = 'S{0}_'.format(i)
+            setattr(thetree, prefix + 'area', [0]*32)
+            setattr(thetree, prefix + 'time', [0]*32)
         return
 
     def analTvT(self,raw,evtnum):
@@ -890,6 +962,10 @@ if __name__ == '__main__' :
                       help="Do SPE calculation")
     parser.add_option("-F", "--H5Files", action="store_true", dest="H5Files", default=False,
                       help="Option to process .h5 files (rather than zipped HDF5 files)")
+    parser.add_option("-A", "--StoreAllTriggers", action="store_true",
+                      dest="StoreAllTriggers", default=False,
+                      help="Optionally store all triggers as a tree in the \
+                      ROOT file. This can make the output VERY big!")
 
     (options, args) = parser.parse_args(args=sys.argv)
     #print 'options',options
@@ -943,6 +1019,8 @@ if __name__ == '__main__' :
         if len(g)>1 and '-' not in rfn: rfn += '-'
     outputFilePrefix = rfn
     rfn += '.root'
+    if options.StoreAllTriggers:
+        P.AllTrigsfname = outputFilePrefix + '_alltrigs.root'
     print 'process.main Output root file name is',rfn
     reconfn = outputFilePrefix + '.h5'
     if options.WriteRecon:
@@ -954,8 +1032,11 @@ if __name__ == '__main__' :
     first = True
     for fn in fnlist:
         if P.startRun(file=fn):
-            if first: P.start()
-            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime,dumpNZcode=dumpNZcode)
+            if first: P.start(StoreAllTriggers=options.StoreAllTriggers)
+            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,
+                        timeTempOnly=options.TemperatureVsTime,
+                        dumpNZcode=dumpNZcode,
+                        StoreAllTriggers=options.StoreAllTriggers)
             P.endRun()
             first = False
     hdf5OutputFileName = P.finish(rfn=rfn, Draw=Draw)
