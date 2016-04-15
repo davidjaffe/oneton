@@ -457,6 +457,10 @@ class process():
                         thetree.WFDped[theidx] = self.aWFD[k][0]
                         thetree.WFDpedsd[theidx] = self.aWFD[k][1]
                         for i in range(len(self.aWFD[k][4])):
+                            if i>31:
+                                print("WARNING: tried to save event with > 32 pulses. Only saving first 32...")
+                                therun, theevt = self.aWFD['RunEventNumber']                                
+                                print("Run = {0}, Event = {1}, channel = {2}".format(therun, theevt, k))
                             areas[i] = self.aWFD[k][4][i]
                             times[i] = self.aWFD[k][5][i]
                         setattr(thetree, k+'_area', areas)
@@ -962,7 +966,7 @@ if __name__ == '__main__' :
                       help="Do SPE calculation")
     parser.add_option("-F", "--H5Files", action="store_true", dest="H5Files", default=False,
                       help="Option to process .h5 files (rather than zipped HDF5 files)")
-    parser.add_option("-A", "--StoreAllTriggers", action="store_true",
+    parser.add_option("-R", "--StoreAllTriggers", action="store_true",
                       dest="StoreAllTriggers", default=False,
                       help="Optionally store all triggers as a tree in the \
                       ROOT file. This can make the output VERY big!")
