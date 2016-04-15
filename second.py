@@ -87,6 +87,7 @@ class second():
         # cut ranges for 'good' time measurement for WFD or TDC
         self.CTtimes = {} # for WFD and cosmic triggers
         self.LEDtimes = {} # for WFD and LED triggers
+        self.Mtimes  = {} # for WFD and multiplicity triggers
         for c in self.signalCtrs:
             self.CTtimes[c] = [120.,200.]
             if c in ['S4','S5']: self.CTtimes[c] = [90.,160.]
@@ -94,9 +95,20 @@ class second():
             if c=='S4' : self.LEDtimes[c] = [90.,130.]
             if c=='S5' : self.LEDtimes[c] = [85.,125.]
             if c in ['S6','S7'] : self.LEDtimes[c] = [50., 300.] # broad range to see background
+            self.Mtimes[c] = [100.,200.] # default range
+            
+        self.Mtimes['S0'] = self.rangeGivenMS(153., 7.9) # range from fits to run1409-1429 data
+        self.Mtimes['S1'] = self.rangeGivenMS(163., 7.6)
+        self.Mtimes['S2'] = self.rangeGivenMS(161., 7.6)
+        self.Mtimes['S3'] = self.rangeGivenMS(164., 7.7)
+        self.Mtimes['S4'] = self.rangeGivenMS(142., 7.6)
+        self.Mtimes['S5'] = self.rangeGivenMS(141., 7.1)
+
+                
         self.cutTimes = {}
         self.cutTimes['CT'] = self.CTtimes
         self.cutTimes['LED']= self.LEDtimes
+        self.cutTimes['M']  = self.Mtimes
 
         ns = 3.
         self.LED_TDC = {} # for TDC and LED triggers
@@ -163,6 +175,13 @@ class second():
 
         if self.LEDonly : print 'second.init ONLY PROCESS LED TRIGGERS',self.trigList
         return
+    def rangeGivenMS(self,mean,sgm,nsgm=3.):
+        '''
+        return [min,max] given mean, sgm and # of sigma
+        min = mean - nsgm*sgm
+        max = mean + nsgm*sgm
+        '''
+        return [mean-nsgm*sgm, mean+nsgm*sgm]
     def open(self,fn):
         '''
         open hdf5 file. handle gzipped files
@@ -433,7 +452,7 @@ class second():
                         name = trig+'_WFD_area_'+x
                         for a in self.makeList(areas):
                             self.Hists[name].Fill(abs(a))
-                if trig=='CT' or trig=='LED':
+                if trig=='CT' or trig=='LED' or trig=='M':
                     timeCut = self.cutTimes[trig]
                     for x in WFDtime:
                         hits = 0
@@ -694,7 +713,7 @@ if __name__ == '__main__' :
     LEDonly = False
     inputFile = None
     if len(sys.argv)>1: maxevt = int(sys.argv[1])
-    if len(sys.argv)>2: LEDonly = True
+    if len(sys.argv)>2 and str(sys.argv[2]).upper()=='LED': LEDonly = True
     if len(sys.argv)>3: inputFile = sys.argv[3]
 
     S = second(useLogger=True)

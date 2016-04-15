@@ -70,8 +70,9 @@ class gfit():
         return GoodFit,mean,emean, sgm, prob
     def fitNGaus(self,hname,debug=False,start_with_Chi2=False, inputPar=[None,0.1,None,None], inputLimits=[ [None,None], [None,None], [None,None], [None,None] ]):
         '''
-        return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with 
-        function NGaus
+        return GoodFit (T/F),mean,emean, sg1,esg1, mupois,emupois, prob of fit to hist hname with function NGaus
+        restrict range of fit from 1st bin to last bin with non-zero content to avoid
+        a spurious high prob due to good agreement with many zero bins
         NOTE NUMBER OF RETURNED VARIABLES DIFFERS FROM gfit.fit
         may include: 
         iterative fit to hist hname
@@ -85,17 +86,26 @@ class gfit():
         tot = hname.GetEntries()
         under = hname.GetBinContent(0)
         bin1 = hname.GetBinContent(1)
-        over  = hname.GetBinContent(hname.GetXaxis().GetNbins()+1)
+        nbins = hname.GetXaxis().GetNbins()
+        over  = hname.GetBinContent(nbins+1)
         ent = tot - under - over 
-        xlo = xmi = hname.GetXaxis().GetXmin()
-        xhi = xma = hname.GetXaxis().GetXmax()
+        xlo = hname.GetXaxis().GetXmin()
+        xhi = hname.GetXaxis().GetXmax()
+        binc = over
+        nzbin = nbins+1
+        while binc==0 and nzbin>0: # find 1st non-zero bin 
+            nzbin -= 1
+            binc = hname.GetBinContent(nzbin)
+        xhi = min(xhi,hname.GetBinCenter(min(nbins+1,nzbin+1)))
+
 
         GoodFit = False
 
         # reject hists with no entries or with too few entries
         # in the meaningful bins (>1 and <Nbin)
         if tot<=0 or float(ent)/float(tot)<0.50 :
-            return GoodFit, ave,rms, -1., -1.
+            return GoodFit, ave,rms, -1., -1., -1.,-1., -1.
+
 
         if debug :
             print 'gfit.fitNGaus: name,tot,under,bin1,over,ent',name,tot,under,bin1,over,ent
@@ -112,7 +122,7 @@ class gfit():
         if inputPar[0] is not None: ent    = inputPar[0]
         if inputPar[1] is not None:
             mupois = inputPar[1]
-            mean = ave/mupois
+            mean = ave/max(1.,mupois)
         if inputPar[2] is not None: mean   = inputPar[2]
         if inputPar[3] is not None: sgm    = inputPar[3]
 
@@ -135,7 +145,7 @@ class gfit():
 
         lo,hi = inputLimits[2]
         if lo is None: lo = 0.
-        if hi is None: hi = 10.*mean
+        if hi is None: hi = min(xhi,10.*mean) # mean cannot be outside range of his
         g2.SetParLimits(2, lo, hi)
 
         lo3,hi3 =  inputLimits[3]
@@ -147,10 +157,11 @@ class gfit():
 
         g2.FixParameter(3, sgm) # fix width of gaussian for first pass
         g2.FixParameter(0, ent) # fix constant for BOTH passes
+        if debug: self.reportPar(g2,words='gfit.fitNGaus before 1st fit:')
         hname.Fit("g2",fit_options) # first pass
 
-
         g2.SetParLimits(3, lo3, hi3) # constraint on width of gaussian
+        if debug: self.reportPar(g2,words='gfit.fitNGaus after 1st fit:')
         hname.Fit("g2",fit_options)  # second pass
 
         fit_options = default_fit_opt
@@ -178,6 +189,18 @@ class gfit():
             print ''
         
         return GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob
+    def reportPar(self,g,words=None):
+        '''
+        report parameters and limits
+        '''
+        lo,hi = ROOT.Double(0.),ROOT.Double(0.)
+        if words is not None: print words,
+        for ipar in range(g.GetNpar()):
+            g.GetParLimits(ipar,lo,hi)
+            x = g.GetParameter(ipar)
+            print g.GetParName(ipar),x,'limits',lo,hi,
+        print ''
+        return
     def ParAtLimits(self,g):
         '''
         flag parameters that are at limits
@@ -242,6 +265,9 @@ class gfit():
     def testFit(self,inputPoisMu=0.1,nevt=1000.,mode=0):
         '''
         test fitting with fake NGaus distributions
+
+        Studies of 20160307 show that best results for SPE fitting are obtained for mode==4:
+        guesses at mupois, sigma without externally specifying limits on parameters
         '''
 
 
@@ -265,7 +291,9 @@ class gfit():
         if mode==3: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         inputPar = [None, Imupois, None, Isg1]
-        if mode==4: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
+        if mode==4:
+            #print 'mode',mode,'inputPar',inputPar,'debug',debug,'swChi2',SwChi2,'h',h
+            GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
 
             
         inputLimits=[ [None,None], [1.e-4, 10.], [None,None], [.8*Isg1, 1.2*Isg1] ]
@@ -279,7 +307,12 @@ class gfit():
         inputPar = [None, Imupois, None, Isg1]
         inputLimits=[ [None,None], [1.e-4, 1.1*Imupois], [None,None], [.5*Isg1, 2.*Isg1] ]
         if mode==7: GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar, inputLimits=inputLimits,debug=debug,start_with_Chi2=SwChi2)
-        
+
+        # like mode=4, but don't use input sigma
+        inputPar = [None, Imupois, None, 15.]
+        if mode==8:
+            #print 'mode',mode,'inputPar',inputPar,'debug',debug,'swChi2',SwChi2,'h',h
+            GoodFit,mean,emean, sg1,esg1, mupois,emupois, prob  = self.fitNGaus(h,inputPar = inputPar,debug=debug,start_with_Chi2=SwChi2)
             
         print 'mode',mode,'mupois',mupois, 'mean', mean,'sigma',sg1
 
@@ -290,10 +323,11 @@ if __name__ == '__main__' :
     G = gfit()
     hists = []
     ROOT.gROOT.ProcessLine("gROOT->SetBatch()")
-    for nevt in [1000.]:
+    for nevt in [100., 1000.]:
         for m in [0.1, 0.5, 1.0, 2.0,  4.0,  6.]:
 
-            for mode in [ 4, 5,  7]:
+            for mode in [ 4, 8]:   # , 5,  7]:
+                #print 'm,nevt,mode',m,nevt,mode
                 h = G.testFit(inputPoisMu=m,nevt=nevt,mode=mode)
                 print h.GetName()
                 if h in hists: print 'appending duplicate hist',h.GetName()
