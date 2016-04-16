@@ -46,5 +46,5 @@ class rootpyEvts():
         '''
         self.AllTrigsfname = fname
         self.rfile = rootpy.io.root_open(self.AllTrigsfname, 'recreate')
-        self.tree = Tree('evttree'+self.AllTrigsfname, model=Trigger)
+        self.tree = Tree('evttree', model=Trigger)
         return

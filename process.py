@@ -461,6 +461,7 @@ class process():
                                 print("WARNING: tried to save event with > 32 pulses. Only saving first 32...")
                                 therun, theevt = self.aWFD['RunEventNumber']                                
                                 print("Run = {0}, Event = {1}, channel = {2}".format(therun, theevt, k))
+                                break
                             areas[i] = self.aWFD[k][4][i]
                             times[i] = self.aWFD[k][5][i]
                         setattr(thetree, k+'_area', areas)
