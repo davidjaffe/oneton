@@ -355,7 +355,7 @@ class process():
         self.evtCode = {}
 
         if self.rootpyEvts is not None:
-            self.rootpyEvts.rnum = self.R.RunNumber
+            self.rootpyEvts.tree.rnum = int(self.R.RunNumber)
             
         integerKeys = []
         for key in EvtDir.keys():
@@ -431,12 +431,16 @@ class process():
             if self.rootpyEvts is not None:
                 thetree = self.rootpyEvts.tree
                 thetree.evtnum = int(evtkey)
-                thetree.temp = Event['Event_Temp'].value
+                thetree.temp = self.cT.getCalibTC(Event['Event_Temp'].value)
                 thetree.time = Event['Event_Time'].value
                 thetree.QDC1 = [ch[1] for ch in Event['QDC_1']]
                 thetree.QDC2 = [ch[1] for ch in Event['QDC_2']]
                 thetree.TDCnumch = len(Event['TDC'])
-
+                thetree.scaler = [int(val) for val in Event['Scaler']]
+                trigstring = ''                
+                for trig in triggers: trigstring += trig + ' '
+                thetree.trigtype = trigstring.ljust(9)
+                
                 for i in range(len(Event['TDC'])):
                     thetree.TDCch[i] = Event['TDC'][i][0]
                     thetree.TDCval[i] = Event['TDC'][i][1]
@@ -904,7 +908,7 @@ class process():
         onlyfiles = [os.path.join(rawDataDir,f)
             for f in os.listdir(rawDataDir)
             if os.path.isfile(os.path.join(rawDataDir, f))
-            and os.path.splitext(f)[1]==ext]
+            and os.path.splitext(f)[1]==ext and 'RunInfo.h5' not in f]
         return onlyfiles
     def seeCalibData(self,rawDataDir):
         '''

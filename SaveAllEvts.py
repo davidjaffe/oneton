@@ -10,6 +10,7 @@ import rootpy
 from rootpy.tree import IntCol, FloatCol, FloatArrayCol, IntArrayCol, CharCol, CharArrayCol
 from rootpy.tree import Tree
 from rootpy import stl
+import h5py
 
 class TDC(rootpy.tree.TreeModel):
     TDCnumch = IntCol()
@@ -37,7 +38,8 @@ class Trigger(TDC, WFD,
     time = FloatCol()
     QDC1 = FloatArrayCol(16)
     QDC2 = FloatArrayCol(16)
-    scaler = IntArrayCol(16)
+    scaler = IntArrayCol(17)
+    trigtype = CharArrayCol(10)
     
 class rootpyEvts():
     def __init__(self, fname):
@@ -47,4 +49,13 @@ class rootpyEvts():
         self.AllTrigsfname = fname
         self.rfile = rootpy.io.root_open(self.AllTrigsfname, 'recreate')
         self.tree = Tree('evttree', model=Trigger)
+        return
+
+class h5Evts():
+    def __init__(self, fname):
+        '''
+        Initialize the object, creating the HDF5 file.
+        '''
+        self.fname = fname
+        self.h5file = h5py.File(fname, mode='w')
         return
