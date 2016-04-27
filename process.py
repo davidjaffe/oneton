@@ -115,7 +115,7 @@ class process():
             print 'process.endRun recorded',self.overlaps,'overlaps of lo,hi range of an ADC channel'
         self.overlaps = 0
         if self.rootpyEvts is not None:
-            self.rootpyEvts.rfile.Write()
+            self.rootpyEvts.rfile.Flush()
         return
     def makeTvTgraphs(self):
         '''
@@ -907,20 +907,28 @@ class process():
         #f = fn.split('/')[-1]
         f = os.path.basename(fn) 
         return os.path.splitext(f)[0]#Won't fail on periods in the filename.
-    def getRawDataList(self,rawDataDir, H5Files=False):
+    def getRawDataList(self,rawDataDir, H5Files=False, excldirs=[]):
         '''
         return list of full path name of files in rawDataDir
-        cribbed from http://stackoverflow.com/questions/3207219/how-to-list-all-files-of-a-directory-in-python
+        cribbed from http://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
+        and http://stackoverflow.com/questions/13571134/python-how-to-recursively-go-through-all-subdirectories-and-read-files
+
+        Arguments:
+        - Base directory.
+        - Flag to use HDF5 files or zip files.
+        - A list of directories to exclude from the search.
         '''
         if H5Files:
             ext = '.h5'
         else:
             ext = '.zip'
-        onlyfiles = [os.path.join(rawDataDir,f)
-            for f in os.listdir(rawDataDir)
-            if os.path.isfile(os.path.join(rawDataDir, f))
-            and os.path.splitext(f)[1]==ext and 'RunInfo.h5' not in f]
-        return onlyfiles
+        datafiles = []
+        for folder, subfolders, files in os.walk(rawDataDir, topdown=True):
+            subfolders[:] = [d for d in subfolders if d not in excldirs]
+            for thefile in files:
+                if os.path.splitext(thefile)[1]==ext and 'RunInfo.h5' not in thefile:
+                    datafiles.append(os.path.join(folder, thefile))
+        return datafiles
     def seeCalibData(self,rawDataDir):
         '''
         dump calib data for all runs in rawDataDir
@@ -986,6 +994,10 @@ if __name__ == '__main__' :
                       dest="StoreAllTriggers", default=False,
                       help="Optionally store all triggers as a tree in the \
                       ROOT file. This can make the output VERY big!")
+    parser.add_option("-E", "--ExcludeDirs", action="store", dest="excldirs",
+                      default = "", type="string",
+                      help="Exclude sub-dirs from the data file search if using -R. \
+                      Use paths to the base search directory, separated by a semicolon.")
 
     (options, args) = parser.parse_args(args=sys.argv)
     #print 'options',options
@@ -1010,7 +1022,8 @@ if __name__ == '__main__' :
     else:
         rawDataDir = os.getcwd()#Get current directory
     if options.MakeInputFileList: 
-        fnlist = P.getRawDataList(rawDataDir, options.H5Files)
+        excldirs = options.excldirs.split(";")
+        fnlist = P.getRawDataList(rawDataDir, options.H5Files, excldirs)
     else:
         fnlist = P.defaultFileList()
 
