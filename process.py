@@ -80,6 +80,7 @@ class process():
         self.bookHists('WFD')
         if StoreAllTriggers:
             self.InitTree()
+            print('Initialized the tree.')
         return
     def InitTree(self):
         if self.AllTrigsfname is None:
@@ -113,6 +114,8 @@ class process():
         if self.overlaps>0:
             print 'process.endRun recorded',self.overlaps,'overlaps of lo,hi range of an ADC channel'
         self.overlaps = 0
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.rfile.Write()
         return
     def makeTvTgraphs(self):
         '''
@@ -216,7 +219,9 @@ class process():
         if kind.lower()=='tdc':
             OK = True
             dx = self.R.getTDCConfig('width')
-            md = self.R.getModuleData('TDC','ChanDesc')
+            if self.R.TDCchdesc is None:
+                self.R.TDCchdesc = self.R.getModuleData('TDC','ChanDesc')
+            md = self.R.TDCchdesc
             # 1d : raw and in ns
             for w in md:
                 title = 'raw TDC ' + w.replace('+','or')
@@ -274,7 +279,9 @@ class process():
             #for key in TDChistnames: print 'TDChistnames['+key+']',TDChistnames[key]
         if kind=='QDC':
             OK = True
-            md = self.R.getModuleData('QDC','ChanDesc')
+            if self.R.QDCchdesc is None:
+                self.R.QDCchdesc = self.R.getModuleData('QDC','ChanDesc')
+            md = self.R.QDCchdesc
             clean = 'N/C' not in md
             while not clean:
                 md.remove('N/C')
@@ -728,12 +735,14 @@ class process():
         return code = 0 = ok, otherwise not
         '''
         code = 0
-        runnum = self.R.getRunDetail('run')
+        runnum = self.R.RunNumber
         moniker = 'Run ' + str(runnum) + ' Event ' + str(evtnum)
         TL = ['All']
         TL.extend(self.R.unpackTrigger(raw['TDC']))
 
-        md = self.R.getModuleData('QDC','ChanDesc')
+        if self.R.QDCchdesc is None:
+            self.R.QDCchdesc = self.R.getModuleData('QDC','ChanDesc')
+        md = self.R.QDCchdesc
         while 'N/C' in md: md.remove('N/C')
         
         # create a dictionary with key = channel, value = list of QDC values (can have 2 entries, 1 for lo- and 1 for hi-range)
@@ -839,7 +848,9 @@ class process():
         return code = 0 = ok, otherwise not
         '''
         code = 0
-        TDCmd   = self.R.getModuleData('TDC','ChanDesc')
+        if self.R.TDCchdesc is None:
+            self.R.TDCchdesc = self.R.getModuleData('TDC','ChanDesc')
+        TDCmd = self.R.TDCchdesc
         Hists,TDChistnames = self.Hists,self.TDChistnames
         TL = ['All']
         TL.extend(self.R.unpackTrigger(raw))
