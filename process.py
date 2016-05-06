@@ -43,6 +43,7 @@ class process():
         self.calTemps = []
         self.AllTrigsfname = None
         self.rootpyEvts = None
+        self.NoHists = False
 
         if makeDirs:
             now = datetime.datetime.now()
@@ -75,9 +76,10 @@ class process():
 
         return
     def start(self, StoreAllTriggers=False):
-        self.bookHists('TDC')
-        self.bookHists('QDC')
-        self.bookHists('WFD')
+        if not self.NoHists:
+            self.bookHists('TDC')
+            self.bookHists('QDC')
+            self.bookHists('WFD')
         if StoreAllTriggers:
             self.InitTree()
             print('Initialized the tree.')
@@ -751,7 +753,19 @@ class process():
         rng = ['hi','lo'] # low,high range: hilo =1,0
         self.aQDC = {}
         for x in cd:
-            self.aQDC[x] = QDC[x]
+            if len(QDC[x]) == 1:
+                self.aQDC[x] = QDC[x]
+            elif len(QDC[x]) == 2:
+                #probably both ranges triggered, use the low one unless there is an overflow.
+                val = [data for data in QDC[x] if data[2]==1 and not data[3]==1]
+                if len(val) is not 0:
+                    self.aQDC[x] = val[0]
+                else:
+                    self.aQDC[x] = [data for data in QDC[x] if data[2] != 1]
+            else:
+                print('WARNING: more than 2 entries in a single QDC channel! Writing out zeroes to channel -1')
+                QDC[x][0] = (-1,0,0,0)
+                self.aQDC[x] = QDC[x][0]
             i = md.index(x)
             for y in QDC[x]:
                 #print 'process.analQDC x,QDC[x],y:',x,QDC[x],y
@@ -759,13 +773,14 @@ class process():
                     ch,v,hilo = y
                 else:
                     ch,v,hilo,ovfl = y # chan#, value, hirange or lowrange, overflow
-                for tl in TL:
-                    name = tl+'_QDC'+rng[hilo]+'_'+x
-                    self.Hists[name].Fill(v)
-                    name = tl+'_QDC_'+x
-                    self.Hists[name].Fill(v)
-                    name = 'chan_vs_QDC_'+tl
-                    self.Hists[name].Fill(v,float(i))
+                if not self.NoHists:
+                    for tl in TL:
+                        name = tl+'_QDC'+rng[hilo]+'_'+x
+                        self.Hists[name].Fill(v)
+                        name = tl+'_QDC_'+x
+                        self.Hists[name].Fill(v)
+                        name = 'chan_vs_QDC_'+tl
+                        self.Hists[name].Fill(v,float(i))
         
         for x in QDC:
             if len(QDC[x])>1 and x!='N/C':
@@ -812,17 +827,18 @@ class process():
                     print 'process.analWFD ',x,'setting code',code,'pTime',pTime
             #if code>0: a1,a2,a3,a4,a5,a6 = self.W.pulseAnal(WFD[x],x,debug=1)   ###### SPECIAL #####
             y = float(cd.index(x))
-            for tl in TL:
-                for i,pren in enumerate(prenames):
-                    name = pren+'_vs_WFD_'+tl
-                    #print 'i,pren,V[i]',i,pren,V[i]
-                    if pren=='ped' or pren=='pedsd':
-                        self.Hists[name].Fill(V[i],y)
-                    elif pren=='npulse':
-                        self.Hists[name].Fill(float(len(V[i])),y)
-                    else:
-                        for v in V[i]:
-                            self.Hists[name].Fill(float(v),y)
+            if not self.NoHists:
+                for tl in TL:
+                    for i,pren in enumerate(prenames):
+                        name = pren+'_vs_WFD_'+tl
+                        #print 'i,pren,V[i]',i,pren,V[i]
+                        if pren=='ped' or pren=='pedsd':
+                            self.Hists[name].Fill(V[i],y)
+                        elif pren=='npulse':
+                            self.Hists[name].Fill(float(len(V[i])),y)
+                        else:
+                            for v in V[i]:
+                                self.Hists[name].Fill(float(v),y)
         return code
     def dumpaWFD(self):
         '''
@@ -869,34 +885,34 @@ class process():
 
         TDChits = []
 
-
-        for x in cd:
-            i = TDCmd.index(x)
-            TDChits.append(i)
-            Hists[TDChistnames['raw'+x]].Fill(rawCD[x][1])
-            for tl in TL:
-                Hists[TDChistnames[tl+x]].Fill(nsCD[x][1])
-        
-        for ref in self.refTDCs:
-            if ref in cd:
-                tref = nsCD[ref][1]
-                for x in cd:
-                    if x!=ref and ref[0]==x[0]:
-                        dt = nsCD[x][1]-tref
-                        for tl in TL:
-                            Hists[TDChistnames[tl+'dTDC'+x+'-'+ref]].Fill(dt)
-
-        for tl in TL:
-            name = 'chan_vs_TDC_' + tl
+        if not self.NoHists:
             for x in cd:
-                y = float(TDCmd.index(x))
-                Hists[name].Fill(nsCD[x][1],y)
+                i = TDCmd.index(x)
+                TDChits.append(i)
+                Hists[TDChistnames['raw'+x]].Fill(rawCD[x][1])
+                for tl in TL:
+                    Hists[TDChistnames[tl+x]].Fill(nsCD[x][1])
+        
+            for ref in self.refTDCs:
+                if ref in cd:
+                    tref = nsCD[ref][1]
+                    for x in cd:
+                        if x!=ref and ref[0]==x[0]:
+                            dt = nsCD[x][1]-tref
+                            for tl in TL:
+                                Hists[TDChistnames[tl+'dTDC'+x+'-'+ref]].Fill(dt)
+
+            for tl in TL:
+                name = 'chan_vs_TDC_' + tl
+                for x in cd:
+                    y = float(TDCmd.index(x))
+                    Hists[name].Fill(nsCD[x][1],y)
                             
-        # correlations between TDC channels
-        if len(TDChits)>0:
-            for x in TDChits:
-                for y in TDChits:
-                    if y>x: Hists['TDC_vs_TDC'].Fill(x,y)
+            # correlations between TDC channels
+            if len(TDChits)>0:
+                for x in TDChits:
+                    for y in TDChits:
+                        if y>x: Hists['TDC_vs_TDC'].Fill(x,y)
 
         return code
     def getFilePrefix(self,fn):
@@ -998,6 +1014,8 @@ if __name__ == '__main__' :
                       default = "", type="string",
                       help="Exclude sub-dirs from the data file search if using -R. \
                       Use paths to the base search directory, separated by a semicolon.")
+    parser.add_option('-H', '--NoHists', action='store_true',
+                      help='Don\'t calculate any histograms')
 
     (options, args) = parser.parse_args(args=sys.argv)
     #print 'options',options
@@ -1015,7 +1033,7 @@ if __name__ == '__main__' :
     
     P = process()
     P.writeRecon = options.WriteRecon
-
+    P.NoHists=options.NoHists
     # get list of potential input files
     if len(args) > 1:
         rawDataDir = P.pip.fix(args[1])
