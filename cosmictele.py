@@ -5,7 +5,7 @@ units are cm
 20160301
 '''
 import numpy
-#import graphUtils
+import graphUtils
 #import ROOT
 #from ROOT import TFile,TH1D,TH2D,gDirectory
 import math
@@ -17,11 +17,98 @@ class cosmictele():
         self.zTop        = 184.48 # height of active volume above floor
         self.zHeight     = 125.0  # height of active volume
         self.dzFloor     = 350.   # assumed height of a floor
-        self.zCSC1TozTop = 59.48
+        self.zCSC1TozTop = 59.48  # from bottom of CSC on dark box to top of active volume
         self.zCSC2ceiling = self.zCSC1TozTop + 100.
         self.zCSC1first   = self.zCSC1TozTop - (self.zTop + self.dzFloor)
         self.zCSC1basement= self.zCSC1TozTop - (self.zTop + 2.*self.dzFloor)
+
+        self.gU = graphUtils.graphUtils()
         
+        return
+    def where(self,d=99.5,h=125.,tC=math.acos(1./1.33)):
+        '''
+        determine footprint of 1st floor CSC and CSC on top of dark box
+        for cosmic ray angles and intersection point on top of vessel
+        '''
+        tanTC = math.tan(tC) # tangent of Cerenkov angle
+        k = self.zTop + self.dzFloor  # from floor of 1st floor to top of active volume
+        s = self.zCSC1TozTop   # from top of active volume to bottom of CSC on dark box
+        t = 15. # thickness of CSC
+        w = 130. # width of CSC
+        h = self.zHeight
+
+        applyCuts = False
+        cCuts = ''
+        
+        rtopLimits = [-w/2.,w/2.]
+        minPathLen = h/3.
+        miny = d/5.
+        if applyCuts:
+            cCuts = '_cuts_applied'
+            print 'cosmictele.where: Cuts on position of top CSC(cm)',rtopLimits,'mu path length in water(cm)',minPathLen,'min y(cm)',miny
+
+        stuff = {}
+        TMG = {}
+        namelist  =['dxTop_vs_dxBottom','PathLen_vs_dxBottom','theta_vs_dxBottom','x_vs_dxBottom','y_vs_dxBottom']
+        for name in namelist:
+            TMG[name] = self.gU.makeTMultiGraph(name+cCuts)
+        for ix in range(10):
+            x = float(ix+1)*d/20.
+            stuff[x] = []
+            for thetadeg in range(-45,46):
+                theta = float(thetadeg)*math.pi/180.
+                tantheta = math.tan(theta)
+
+                Q = (tanTC - tantheta)/(1.+tanTC*tantheta)
+            #for iy in range(10):
+                #y = float(iy)*(d-x)/10.
+        
+                #Q = (d - (x+y))/h
+                #tantheta = (tanTC - Q)/(Q*tanTC + 1.)
+                #theta = math.atan(tantheta)
+                #thetadeg = theta*180./math.pi
+
+                gbot = d/2. - x + (k+t)*tantheta
+                l = h
+                if theta>0: l = min(h,x/math.sin(theta))
+                rtop = (s+t)*tantheta - (d/2. - x)
+                y = ycalc = d - h*math.tan(tC-theta) - x
+                #print 'x,y,tC(deg),theta(deg),gbot,rtop,l,ycalc',x,y,tC*180./math.pi,thetadeg,gbot,rtop,l,ycalc
+                if not applyCuts or (rtopLimits[0]<=rtop and rtop<=rtopLimits[1] and l>=minPathLen and ycalc>miny):
+                    ycalc = max(-0., ycalc)
+                    L = [x,ycalc,thetadeg,gbot,rtop,l]
+                    stuff[x].append( L )
+
+            dxTop,dxBottom,PathLen,THETA,X,Y = [],[],[],[],[],[]
+            xname = str(int(10.*x+0.5)) + 'mm'
+            yname = str(int(10.*y+0.5)) + 'mm'
+            V = {}
+            for var in ['dxTop','dxBottom','PathLen','theta','x','y']:
+                V[var] = []
+            for L in stuff[x]:
+                x,y,thetadeg,gbot,rtop,l  = L
+                V['dxBottom'].append(gbot)
+                V['dxTop'].append(rtop)
+                V['PathLen'].append(l)
+                V['theta'].append(thetadeg)
+                V['x'].append(x)
+                V['y'].append(y)
+
+            for base in namelist:
+                name = base+'_Xis'+xname+'_Yis'+yname
+                title = name.replace('_',' ')
+                vvar = base.split('_')[0]
+                uvar = base.split('_')[2]
+                if len(V[uvar])>0:
+                    g = self.gU.makeTGraph(V[uvar],V[vvar],title,name)
+                    self.gU.color(g,ix,ix,setMarkerColor=True)
+                    TMG[base].Add(g)
+
+        for base in TMG:
+            self.gU.drawMultiGraph(TMG[base],abscissaIsTime=False,drawLines=True,figdir='CTele/')
+                
+                
+                
         return
     def pathAngle(self,d=99.5,h=125.,tC=math.acos(1./1.33)):
         '''
@@ -136,3 +223,5 @@ if __name__ == '__main__' :
                     CT.doit(Nevt=100000,zextrap=z,Nplane=nplane,dzplane2=dzplane)
     if mode==1 or mode==2:
         CT.pathAngle(h=CT.zHeight)
+    if mode==3:
+        CT.where()
