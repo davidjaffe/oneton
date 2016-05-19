@@ -323,7 +323,7 @@ class graphUtils():
         nGraphs = TMG.GetListOfGraphs().GetSize()
 
 
-        if figdir[-1] != os.path.sep:
+        if len(figdir)>0 and figdir[-1] != os.path.sep:
             pdf = self.pip.fix(figdir + '/' + name + '.pdf')
             ps = self.pip.fix(figdir + '/' + name + '.ps')
         else:
