@@ -306,7 +306,7 @@ class graphUtils():
 
         return
         
-    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None):
+    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None,NLegendColumns=None):
         '''
         draw TMultiGraph with legend and output as pdf
         Default is that abscissa is calendar time.
@@ -351,6 +351,7 @@ class graphUtils():
             lg.AddEntry(g, t, "LP" )
             if abscissaIsTime : self.fixTimeDisplay(g)
         if NGraph>6: lg.SetNColumns(2)
+        if NLegendColumns is not None: lg.SetNColumns(NLegendColumns)
 
         dOption = "AP"
         if drawLines: dOption += "L"

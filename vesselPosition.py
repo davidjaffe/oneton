@@ -27,6 +27,9 @@ dQpmt = 25. # spacing set between bottom PMTs
 
 Rdesign = 104.58/2. # design OD/2
 
+#### Measured height of vessel doc96-v12 130.4925cm(+-0.625cm). Design height 130.08cm
+VesselHeight = 130.4925
+
 print 'width of platform',offset,'bar',bar,'design Radius',Rdesign
 print 'fastener plate thickness',fpt,'radius of R7723 PMT mu-metal shield',Rmushield,'radius of R7723 PMT window',Rpmt,'spacing btwn bottom PMTs',dQpmt
 
@@ -376,6 +379,7 @@ if calcHorizDisp:
 
 ### positions of bottom PMTs 20160204
 ### Assume PMTs in contact with bottom of vessel and bottom of vessel defines Z=0
+ZvesselBottom = 0.
 dY = bar/2. + fpt + bar + fpt + bar + Rmushield
 y = columns['tcm'][2] - 0.5*(columns['tcm'][0]+columns['tcm'][lastIndex-1]) 
 Ypmt = [y - dY for i in range(4)] # all bottom PMTs at same Y position
@@ -385,7 +389,7 @@ Xpmt.append(x)
 for i in range(3):
     x -= dQpmt
     Xpmt.append(x)
-Zpmt = [0. for i in range(len(Xpmt))]
+Zpmt = [ZvesselBottom for i in range(len(Xpmt))]
 
 ### top PMTs
 Xleft = -(offset - columns['rcm'][2] + columns['lcm'][2])/2.
@@ -395,7 +399,8 @@ Yback = offset - 0.5*(columns['ncm'][0] + columns['ncm'][lastIndex-1])
 y4 = Yback - (26.+9./16.)*2.54 + bar/2. + 35.8 - bar - Rmushield
 y5 = Yback - (26.+9./16.)*2.54 + bar/2  - 18.7 + bar + Rmushield
 Ypmt.extend([y4,y5])
-Ztop = 130.4925
+
+Ztop = VesselHeight + ZvesselBottom
 Zpmt.extend([Ztop,Ztop])
 
 ### positions of bottom hodoscopes H4, H5 (give X,Y,Z of corners starting at back right)
@@ -411,13 +416,16 @@ ybl = Yback + bar/2. + bar - (12.+15./16.)*2.54
 Yfront = 0.5*(columns['scm'][0] - columns['scm'][lastIndex-1])
 yfr = Yfront - bar/2. - bar + (2.5)*2.54
 yfl = Yfront - bar/2. - bar + (2.5)*2.54
+# top of H5 is 3.5" above rubber floor
+# rubber floor is 27.8625" below top of platform = bottom of vessel (20160204/4 3-ring binder)
+# H5 thickness is 0.4"
 Ztop = (3.5 - 27.8625)*2.54
 Zbot = Ztop - (0.4)*2.54
 Hodos = {}
 Hodos['H5'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
 
-### H4
+### H4: height is same as H5
 xbr = Xright - (22.+7./16.)*2.54
 xbl = Xright - (34.5)*2.54
 xfr = Xright - (22.+3./8.)*2.54
@@ -425,13 +433,88 @@ xfl = Xright - (34.+7./16.)*2.54
 ybr = Yback + bar/2. - (11.75)*2.54
 ybl = Yback + bar/2. - (12.)*2.54
 yfr = Yfront - bar/2. - bar + (2.+1./8.)*2.54
-yfl = Yfront - bar/2. - bar + (2.+1./8.)*2.54
-Hodos['HF'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+yfl = Yfront - bar/2. - bar + (2.+1./8.)*2.5
+Hodos['H4'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
 
-    
+### H0-H3 referenced to fiducial mark on 80/20 attached to roof (3-ring binder 20160520/4)
+xm = Xright + 1.*2.54
+Yright = Yback
+ym = Yright - (26.+7./16.)*2.54
+zm = ZvesselBottom + VesselHeight + (16.5 -1.5)*2.54
+### from highest to lowest: H2, H0, H3, H1
+### H2 = Counter A
+xbl = xm - (16.+1./8.)*2.54
+xfl = xbl
+xfr = xbr = xbl + 4.*2.54
+ybl = ym + (1.5 + 1.+3./8.)*2.54
+ybr = ybl
+yfl = yfr = ybl - 4.*2.54
+Ztop = zm - 1.5*2.54
+Zbot = Ztop - 0.25*2.54
+Hodos['H2'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+                [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+
+### H0 = Counter D
+xbl = xm + (1.+15./16. - 16.25 - 4.)*2.54
+xfl = xbl
+xfr = xbr = xbl + 4.*2.54
+ybl = ym + (1.5 + 1.+3./8. - 0.32)*2.54
+ybr = ybl
+yfr = yfl = ybl -3.5*2.54
+Ztop = xm - (3.+7./16. - 1.5)*2.54
+Zbot = Ztop - 0.25*2.54
+Hodos['H0'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+                [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+xbrD = xbr # counter B position is referenced to counter D
+ybrD = ybr
+                
+### H3 = Counter B
+xbr = xbrD + (0.25)*2.54
+xfr = xbr
+xfl = xbl = xbr - 4.*2.54
+ybr = ybrD + (4.5 - 1.25)*2.54
+ybl = ybr
+yfl = yfr = ybr - 4.5*2.54
+Ztop = ZvesselBottom + VesselHeight + 9.6 # measured with metric caliper
+Zbot = Ztop - 0.345*2.54
+Hodos['H3'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+                [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+xbrB = xbr  # counter C position is reference to counter B
+ybrB = ybr
+                                               
+### H1 = Counter C                
+xbr = xbrB - 0.6 # metric caliper
+xfr = xbr
+xfl = xbl = xbr - 4.*2.54
+ybr = ybrB + 0.5*(1.735 + 1.77)*2.54
+ybl = ybr
+yfl = yfr = ybr - 4.5*2.54
+Ztop = ZvesselBottom + VesselHeight + 8.95 # metric caliper
+Zbot = Ztop - 0.372*2.54
+Hodos['H1'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
+                [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
+                
 
 
+                    
+#### vertical position of fiducial marks on top of platform wrt rubber covered floor
+#### Book#3, p46. Fiducial marks are on north,east,south,west bars
+#### average multiple measurements for north
+#### Height of rubber covered floor above floor is 1/8"(rubber) + 1/8"(ABS plastic)
+FloorThickness = (1./8. + 1./8.)*2.54
+Zplatform = {}
+Zplatform['North'] = 0.5*(27.+15./16. + 27.+7./8.)*2.54 + FloorThickness
+Zplatform['East']  =     (27.+13./16.)*2.54             + FloorThickness
+Zplatform['South'] =     (27.+15./16.)*2.54             + FloorThickness
+Zplatform['West']  =     (27.75)*2.54                   + FloorThickness
+print 'Vertical position of fiducial marks on top of platform wrt room floor in cm'
+zave = 0.
+for direction in Zplatform:
+    zave += Zplatform[direction]
+    print Zplatform[direction],direction
+zave = zave/float(len(Zplatform))
+print zave,'Average'
                                                 
 
 ############# draw a bunch of stuff
@@ -509,7 +592,7 @@ for iPMT in range(len(Xpmt)):
     rf.WriteTObject(g)
 
 # draw hodoscopes
-icol = 10
+icol = 0
 for H in Hodos:
     XYZ = Hodos[H]
     Xh,Yh = [],[]
@@ -575,9 +658,21 @@ tmg.Add(g)
 
 
 
-gU.drawMultiGraph(tmg,abscissaIsTime=False,xAxisLabel='X(cm) in table coord system',yAxisLabel='Y(cm) in table coord system')
+gU.drawMultiGraph(tmg,abscissaIsTime=False,xAxisLabel='X(cm) in table coord system',yAxisLabel='Y(cm) in table coord system',NLegendColumns=3)
 rf.WriteTObject(g)
 rf.WriteTObject(tmg)
 
 rf.Close()
 print 'Closed',rfn
+
+#### Report positions
+#### Acrylic vessel: x,y,z of bottom center. Radius. External height
+Radius,x0,y0 = bestRxy
+z0 = ZvesselBottom
+print '\nAcrylic vessel x,y,z of bottom center, radius, external height (cm)'
+print x0,y0,z0,Radius,VesselHeight
+print 'Positions of centers of PMT face'
+for i,x in enumerate(Xpmt):
+    y = Ypmt[i]
+    z = Zpmt[i]
+    print i,x,y,z
