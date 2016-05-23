@@ -14,6 +14,34 @@ import sys
 
 gU = graphUtils.graphUtils()
 
+
+def cylGraph(z0,z1,r0,r,title):
+    '''
+    return graph that is drawing of 
+    projection of cylinder given center of bottom (r0), radius r
+    and z of bottom(z0),top(z1)
+    '''
+    
+    x1 = r0 + r
+    y1 = z0
+    x2 = x1
+    y2 = z1
+    x3 = r0 - r
+    y3 = y2
+    x4 = x3
+    y4 = z0
+    x5 = x1
+    y5 = y1
+    X = [x1,x2,x3,x4,x5]
+    Y = [y1,y2,y3,y4,y5]
+    name = title.replace(' ','_')
+    g = gU.makeTGraph(X,Y,title,name)
+    
+    return g
+
+#### MAIN STARTS HERE
+
+
 ### basic stuff
 offsetINCH = 51.  # width,length of platform in inches
 barINCH    = 1.5  # width of 80-20 bar in inches
@@ -391,6 +419,8 @@ for i in range(3):
     Xpmt.append(x)
 Zpmt = [ZvesselBottom for i in range(len(Xpmt))]
 
+
+
 ### top PMTs
 Xleft = -(offset - columns['rcm'][2] + columns['lcm'][2])/2.
 x4 = x5 = Xleft + 41.6 + bar + fpt + bar/2.
@@ -416,6 +446,10 @@ ybl = Yback + bar/2. + bar - (12.+15./16.)*2.54
 Yfront = 0.5*(columns['scm'][0] - columns['scm'][lastIndex-1])
 yfr = Yfront - bar/2. - bar + (2.5)*2.54
 yfl = Yfront - bar/2. - bar + (2.5)*2.54
+
+### for diagnostics
+PlatformCorners = [ [Xright,Yback], [Xright,Yfront], [Xleft,Yfront], [Xleft,Yback], [Xright,Yback] ]
+
 # top of H5 is 3.5" above rubber floor
 # rubber floor is 27.8625" below top of platform = bottom of vessel (20160204/4 3-ring binder)
 # H5 thickness is 0.4"
@@ -438,8 +472,10 @@ Hodos['H4'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], 
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
 
 ### H0-H3 referenced to fiducial mark on 80/20 attached to roof (3-ring binder 20160520/4)
-xm = Xright + 1.*2.54
-Yright = Yback
+### also see 20160523/1
+xp = Xright + (1.5 + 2.+5./8.)*2.54
+xm = xp + 1.*2.54
+Yright = Yback + (1.5/2. + 6.+5./16.)*2.54
 ym = Yright - (26.+7./16.)*2.54
 zm = ZvesselBottom + VesselHeight + (16.5 -1.5)*2.54
 ### from highest to lowest: H2, H0, H3, H1
@@ -456,13 +492,13 @@ Hodos['H2'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], 
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
 
 ### H0 = Counter D
-xbl = xm + (1.+15./16. - 16.25 - 4.)*2.54
+xbl = xm + (1.+15./16. - 16.125 - 4.)*2.54
 xfl = xbl
 xfr = xbr = xbl + 4.*2.54
 ybl = ym + (1.5 + 1.+3./8. - 0.32)*2.54
 ybr = ybl
 yfr = yfl = ybl -3.5*2.54
-Ztop = xm - (3.+7./16. - 1.5)*2.54
+Ztop = zm - (3.+7./16. - 1.5)*2.54
 Zbot = Ztop - 0.25*2.54
 Hodos['H0'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
@@ -481,13 +517,13 @@ Zbot = Ztop - 0.345*2.54
 Hodos['H3'] = [ [xbr,ybr,Ztop], [xfr,yfr,Ztop], [xfl,yfl,Ztop], [xbl,ybl,Ztop], \
                 [xbr,ybr,Zbot], [xfr,yfr,Zbot], [xfl,yfl,Zbot], [xbl,ybl,Zbot] ]
 xbrB = xbr  # counter C position is reference to counter B
-ybrB = ybr
+yfrB = yfr
                                                
 ### H1 = Counter C                
 xbr = xbrB - 0.6 # metric caliper
 xfr = xbr
 xfl = xbl = xbr - 4.*2.54
-ybr = ybrB + 0.5*(1.735 + 1.77)*2.54
+ybr = yfrB + 0.5*(1.735 + 1.77)*2.54
 ybl = ybr
 yfl = yfr = ybr - 4.5*2.54
 Ztop = ZvesselBottom + VesselHeight + 8.95 # metric caliper
@@ -607,6 +643,21 @@ for H in Hodos:
     tmg.Add(g)
     rf.WriteTObject(g)
 
+# draw platform?
+drawPlatform = False
+if drawPlatform:
+    Xp,Yp = [],[]
+    for xy in PlatformCorners:
+        Xp.append(xy[0])
+        Yp.append(xy[1])
+    name = title = 'PlatformCorners'
+    g = gU.makeTGraph(Xp,Yp,title,name)
+    icol += 1
+    gU.color(g,icol,icol,setMarkerColor=True,setMarkerType=False)
+    g.SetLineColor(icol)
+    tmg.Add(g)
+    rf.WriteTObject(g)
+    
 name = title = 'design'
 cR = '{0:.2f}'.format(Rdesign)
 formula = cR + '^{2} = x^{2} + y^{2}'
@@ -656,11 +707,90 @@ gU.color(g,13,13,setMarkerColor=True)
 g.SetLineColor(10) # white lines
 tmg.Add(g)
 
+debugMG = False
 
-
-gU.drawMultiGraph(tmg,abscissaIsTime=False,xAxisLabel='X(cm) in table coord system',yAxisLabel='Y(cm) in table coord system',NLegendColumns=3)
+gU.drawMultiGraph(tmg,abscissaIsTime=False,xAxisLabel='X(cm) in table coord system',yAxisLabel='Y(cm) in table coord system',NLegendColumns=3,debugMG=debugMG)
 rf.WriteTObject(g)
 rf.WriteTObject(tmg)
+
+
+#### add drawings of X vs Z and Y vs Z projections
+vsZ = True
+useTMG = True
+writeTMG = drawTMG = True and useTMG
+if vsZ:
+
+
+    ##### Y vs Z
+    if useTMG:
+        tmgX = gU.makeTMultiGraph('Z_v_X',debug=debugMG) 
+        tmgY = gU.makeTMultiGraph('Z_v_Y',debug=debugMG) 
+    icol = 0
+    Radius,x0,y0 = bestRxy
+    gY = cylGraph(ZvesselBottom, ZvesselBottom+VesselHeight, y0, Radius,'YvZ_vessel')
+    gX = cylGraph(ZvesselBottom, ZvesselBottom+VesselHeight, x0, Radius,'XvZ_vessel')
+    gU.color(gY,icol,icol,setMarkerType=False)
+    gU.color(gX,icol,icol,setMarkerType=False)
+    icol += 1
+    if useTMG:
+        tmgY.Add(gY)
+        tmgX.Add(gX)
+    rf.WriteTObject(gY)
+    rf.WriteTObject(gX)
+
+    drawPMTs = True
+    if drawPMTs:
+
+        abit = 20. #cm. Size of PMT in shield from R7723 ass'y drawing
+        for iPMT in range(len(Xpmt)):
+            sz = -1.
+            if iPMT>3: sz = 1.
+            xc,yc,zc = Xpmt[iPMT],Ypmt[iPMT],Zpmt[iPMT]
+            name = title = 'YvZ_PMT'+str(iPMT)
+            g = cylGraph( zc,zc+sz*abit, yc,Rpmt,title)
+            gU.color(g,icol+iPMT,icol+iPMT,setMarkerColor=False,setMarkerType=False)
+            if useTMG:
+                tmgY.Add(g)
+            rf.WriteTObject(g)
+
+            name = title = 'XvZ_PMT'+str(iPMT)
+            g = cylGraph( zc,zc+sz*abit, xc,Rpmt,title)
+            gU.color(g,icol+iPMT,icol+iPMT,setMarkerColor=False,setMarkerType=False)
+            if useTMG:
+                tmgX.Add(g)
+            rf.WriteTObject(g)
+    drawHodos = True
+    if drawHodos:
+        icol = 0
+        for H in Hodos:
+            XYZ = Hodos[H]
+            Xh,Yh,Zh = [],[],[]
+            for xyz in XYZ:
+                Xh.append(xyz[0])
+                Yh.append(xyz[1])
+                Zh.append(xyz[2])
+            icol += 1
+            name = title = 'XvZ_'+H
+            g = gU.makeTGraph(Xh,Zh,title,name)
+            gU.color(g,icol,icol,setMarkerColor=True,setMarkerType=False)
+            g.SetLineColor(icol) 
+            tmgX.Add(g)
+            rf.WriteTObject(g)
+            name = title = 'YvZ_'+H
+            g = gU.makeTGraph(Yh,Zh,title,name)
+            gU.color(g,icol,icol,setMarkerColor=True,setMarkerType=False)
+            g.SetLineColor(icol) 
+            tmgY.Add(g)
+            rf.WriteTObject(g)
+
+
+    if drawTMG:
+        gU.drawMultiGraph(tmgY,abscissaIsTime=False,xAxisLabel='Y(cm) in table coord system',yAxisLabel='Z(cm) in table coord system',debugMG=debugMG)
+        gU.drawMultiGraph(tmgX,abscissaIsTime=False,xAxisLabel='X(cm) in table coord system',yAxisLabel='Z(cm) in table coord system',debugMG=debugMG)
+    if writeTMG:
+        rf.WriteTObject(tmgY)
+        rf.WriteTObject(tmgX)
+    
 
 rf.Close()
 print 'Closed',rfn

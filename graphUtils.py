@@ -306,14 +306,16 @@ class graphUtils():
 
         return
         
-    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None,NLegendColumns=None):
+    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None,NLegendColumns=None, debugMG = False):
         '''
         draw TMultiGraph with legend and output as pdf
         Default is that abscissa is calendar time.
         Returns canvas
         
         '''
-        debugMG = False
+        if debugMG: print 'graphUtils.drawMultiGraph:TMG',TMG,'TMG.GetListOfGraphs()',TMG.GetListOfGraphs(),\
+            'SetLogy',SetLogy,'SetLogx',SetLogx,'drawLines',drawLines,'xAxisLabel',xAxisLabel,'yAxisLabel',yAxisLabel,'NLegendColumns',NLegendColumns
+       
         if not TMG.GetListOfGraphs(): return  # empty
         title = TMG.GetTitle()
         name  = TMG.GetName()
@@ -384,7 +386,7 @@ class graphUtils():
             if abscissaIsTime : self.fixTimeDisplay(TMG)
 
 
-        self.labelTMultiGraph(TMG,debug=debugMG)
+        self.labelTMultiGraph(TMG,xAxisLabel=xAxisLabel,yAxisLabel=yAxisLabel,debug=debugMG)
         lg.Draw()
         canvas.Draw()
         canvas.SetGrid(1)
@@ -401,14 +403,16 @@ class graphUtils():
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas
-    def makeTMultiGraph(self,name,tit=None):
+    def makeTMultiGraph(self,name,tit=None,debug=False):
         title = tit
         if tit is None:title = name.replace('_',' ')
         tmg = TMultiGraph()
         tmg.SetName(name)
         tmg.SetTitle(title)
+        if debug:
+            print 'graphUtils.makeTMultiGraph:name',name,'title',title,'object',tmg
         return tmg
-    def labelTMultiGraph(self,tmg,debug=False):
+    def labelTMultiGraph(self,tmg,xAxisLabel=None,yAxisLabel=None,debug=False):
         name = tmg.GetName()
         if 'vs' in name:
             s = name.split('_')
@@ -423,6 +427,12 @@ class graphUtils():
                 print 'tmg.GetXaxis()',tmg.GetXaxis(),'tmg.GetYaxis()',tmg.GetYaxis()
             if tmg.GetXaxis(): tmg.GetXaxis().SetTitle(xt)
             if tmg.GetYaxis(): tmg.GetYaxis().SetTitle(yt)
+        if xAxisLabel is not None:
+            tmg.GetXaxis().SetTitle(xAxisLabel)
+            if debug: print 'graphUtils.labelTMultiGraph:xAxisLabel',xAxisLabel
+        if yAxisLabel is not None:
+            tmg.GetYaxis().SetTitle(yAxisLabel)
+            if debug: print 'graphUtils.labelTMultiGraph:yAxisLabel',yAxisLabel
         return
     def makeTGraph(self,u,v,title,name,ex=None,ey=None):
         if ex is None:
