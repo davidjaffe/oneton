@@ -38,6 +38,38 @@ def cylGraph(z0,z1,r0,r,title):
     g = gU.makeTGraph(X,Y,title,name)
     
     return g
+def reportCyl(x0,y0,z0,h,r,name,printHdr):
+    '''
+    for cylinder, given position of center of bottom x0,y0,z0, height h, radius r
+    write x,y,z of center, half-height and radius
+    Assumes cylinder is aligned with x,y,z axes
+    '''
+    z = z0+h/2.
+    if printHdr: print '*Cylinder name, x,y,z of center, half-height, radius. Units cm'
+    print name,x0,y0,z,h/2.,r
+    return
+def reportBox(box,name,printHdr):
+    '''
+    given x,y,z of 8 corners of box,
+    report x,y,z of center, dx,dy,dz (half-width,-height,-length)
+    Assumes box is aligned with x,y,z axes
+    '''
+    lo = [1.e20 for i in range(3)]
+    hi = [-1.e20 for i in range(3)]
+    for xyz in box:
+        for i,v in enumerate(xyz):
+            if v<lo[i]: lo[i]=v
+            if hi[i]<v: hi[i]=v
+    xyz = []
+    d   = []
+    for l,h in zip(lo,hi):
+        xyz.append( 0.5*(l+h) )
+        d.append(0.5*(h-l))
+    if printHdr: print '*Box name, x,y,z of center, half-height,-width,-length. Units cm'
+    print name,' '.join(str(x) for x in xyz),' '.join(str(y) for y in d)
+    return
+        
+    
 
 #### MAIN STARTS HERE
 
@@ -799,10 +831,25 @@ print 'Closed',rfn
 #### Acrylic vessel: x,y,z of bottom center. Radius. External height
 Radius,x0,y0 = bestRxy
 z0 = ZvesselBottom
-print '\nAcrylic vessel x,y,z of bottom center, radius, external height (cm)'
-print x0,y0,z0,Radius,VesselHeight
-print 'Positions of centers of PMT face'
-for i,x in enumerate(Xpmt):
-    y = Ypmt[i]
-    z = Zpmt[i]
-    print i,x,y,z
+if 0:
+    print '\nAcrylic vessel x,y,z of bottom center, radius, external height (cm)'
+    print x0,y0,z0,Radius,VesselHeight
+    print 'Positions of centers of PMT face'
+    for i,x in enumerate(Xpmt):
+        y = Ypmt[i]
+        z = Zpmt[i]
+        print i,x,y,z
+
+
+reportCyl(x0,y0,z0,VesselHeight,Radius,'AcrylicVessel_outerdimensions',True)
+abit = 20. #cm. Size of PMT in shield from R7723 ass'y drawing
+for iPMT in range(len(Xpmt)):
+    sz = -1.
+    if iPMT>3: sz = 1.
+    xc,yc,zc = Xpmt[iPMT],Ypmt[iPMT],Zpmt[iPMT]
+    name = 'S'+str(iPMT)
+    reportCyl(xc,yc,zc,0.,Rpmt,name,False)
+
+HL = sorted(Hodos)    
+for H in HL:
+    reportBox(Hodos[H],H,H==HL[0])
