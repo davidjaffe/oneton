@@ -465,6 +465,27 @@ Ypmt.extend([y4,y5])
 Ztop = VesselHeight + ZvesselBottom
 Zpmt.extend([Ztop,Ztop])
 
+### 20160527 LED positions from measurements of 20160525 in binder
+### label LED positions by nearest signal PMT
+LEDpositions = {}
+for i,x in enumerate(Xpmt):
+    name = 'LEDatS'+str(i)
+    y,z = Ypmt[i],Zpmt[i]
+    if i<=3: # bottom
+        xled = x + Rpmt + 0.5
+        yled = y
+        zled = z - 0.5
+    elif i==4: # back, top 
+        xled = x
+        yled = y + Rpmt + 0.5
+        zled = z + 0.5
+    elif i==5:
+        xled = x
+        yled = y - (Rpmt + 0.5)
+        zled = z + 0.5
+    LEDpositions[name] = [xled,yled,zled]
+LEDlist = sorted(LEDpositions)
+
 ### positions of bottom hodoscopes H4, H5 (give X,Y,Z of corners starting at back right)
 ### H5
 Xright = 0.5*(offset - columns['rcm'][0] - columns['lcm'][0]) - bar
@@ -658,6 +679,20 @@ for iPMT in range(len(Xpmt)):
     gU.color(g,0+iPMT,0+iPMT,setMarkerColor=False,setMarkerType=False)
     tmg.Add(g)
     rf.WriteTObject(g)
+
+# draw LEDs
+xLED,yLED = [],[]
+for LED in LEDlist:
+    x,y,z = LEDpositions[LED]
+    xLED.append(x)
+    yLED.append(y)
+icol = 4
+title = name = 'LED'
+g = gU.makeTGraph(xLED,yLED,title,name)
+gU.color(g,icol,icol,setMarkerColor=True,setMarkerType=True)
+g.SetLineColor(10) # white lines
+tmg.Add(g)
+rf.WriteTObject(g)
 
 # draw hodoscopes
 icol = 0
@@ -853,3 +888,8 @@ for iPMT in range(len(Xpmt)):
 HL = sorted(Hodos)    
 for H in HL:
     reportBox(Hodos[H],H,H==HL[0])
+
+print '*LED positions x,y,z of LED in cm'
+for LED in LEDlist:
+    xyz = LEDpositions[LED]
+    print LED,' '.join(str(v) for v in xyz)
