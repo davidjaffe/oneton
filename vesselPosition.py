@@ -471,8 +471,12 @@ LEDpositions = {}
 for i,x in enumerate(Xpmt):
     name = 'LEDatS'+str(i)
     y,z = Ypmt[i],Zpmt[i]
-    if i<=3: # bottom
-        xled = x + Rpmt + 0.5
+    if i==0 or i==1: # bottom right
+        xled = x + Rpmt + 0.5 + 1.5*2.54/2.
+        yled = y
+        zled = z - 0.5
+    elif i==2 or i==3: # bottom left
+        xled = x - Rpmt - 0.5
         yled = y
         zled = z - 0.5
     elif i==4: # back, top 
@@ -483,6 +487,8 @@ for i,x in enumerate(Xpmt):
         xled = x
         yled = y - (Rpmt + 0.5)
         zled = z + 0.5
+    else:
+        sys.exit('vesselPosition ERROR Unknown LED index ' + str(i))
     LEDpositions[name] = [xled,yled,zled]
 LEDlist = sorted(LEDpositions)
 
