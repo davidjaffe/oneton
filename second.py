@@ -492,7 +492,13 @@ class second():
 
             
             for ctr in QDC:
-                q = QDC[ctr][()][0][1]
+                #print 'ctr',ctr,'QDC[ctr][()]',QDC[ctr][()],'len(QDC[ctr][()])',len(QDC[ctr][()]),'QDC[ctr][()][0]',QDC[ctr][()][0]
+                LL = len(QDC[ctr][()])
+                q = -1
+                if LL==1: # content is list
+                    q = QDC[ctr][()][0][1]
+                if LL==4: # content is array?? 
+                    q = QDC[ctr][()][1]
                 name = trig + '_QDC_' + ctr
                 self.Hists[name].Fill(q)
 
