@@ -22,6 +22,7 @@ import process
 import gzip,shutil
 import pipath
 
+
 class second():
     def __init__(self,useLogger=True):
         self.f = None
@@ -29,6 +30,7 @@ class second():
         self.P = process.process(makeDirs=False)
         self.gU= graphUtils.graphUtils()
         self.pip= pipath.pipath()
+
 
         self.now = now = datetime.datetime.now()
         self.start_time = now
@@ -65,6 +67,7 @@ class second():
         self.LEDonly = LEDonly
         self.trigList = ['CT','M','LED']
         if self.LEDonly: self.trigList = ['LED']
+        self.LEDnextto = None
 
         self.signalCtrs = ['S0','S1','S2','S3','S4','S5','S6','S7']
         self.hodoCtrs   = ['H0','H1','H2','H3','H4','H5']
@@ -220,6 +223,20 @@ class second():
         print words
 
         return
+    def parseComments(self,run,doThis=None):
+        '''
+        parse the comments for the input run (run is string)
+        doThis is the instructions
+        '''
+        if doThis is None: return None
+            
+        Comments = self.f['Run/'+run+'/Comments'][()]
+        for c in Comments.split('\n'):
+            if doThis=='LEDnextto':
+                if 'LED location' in c and 'Next to' in c:
+                    nextToCtr = c[-2:]
+                    return nextToCtr
+        return None
     def loop(self,maxevt=99999999):
         '''
         loop over all events in file
@@ -231,6 +248,7 @@ class second():
             self.currentRun = runnum = int(run)
             print 'second.loop run',runnum,'event',
 
+            self.LEDnextto = self.parseComments(run,'LEDnextto') # helpful for per run hists
             self.book(thisRun = self.currentRun) # per run hists
             
             Events = self.f['Run/'+run+'/Event']
@@ -273,6 +291,7 @@ class second():
         if self.LEDonly: nArea, maxArea = 500,500.
 
         if thisRun is not None:
+            
             cRun = str(thisRun)
             for itrig,trig in enumerate(self.trigList):
                 for iA,sA in enumerate(self.signalCtrs):
@@ -282,7 +301,15 @@ class second():
                             ny,ymi,yma = nx,xmi,xma
                             name = title = trig + '_WFD_time' + sA + '_vs_time' + sB + '_run' + cRun
                             self.Hists[name] = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
-                        
+                sA = self.LEDnextto
+                if sA is not None:
+                    for sB in self.signalCtrs:
+                        if sB!=sA:
+                            nx,xmi,xma = 100,-50.,50.
+                            name = title = trig + '_WFD_dt_' + sB + '_' + sA + '_run' + cRun
+                            self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                            name = title = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_run' + cRun
+                            self.Hists[name] = TH1D(name,title,nx,xmi,xma)
             print 'second.book booked hists for run',thisRun
             return
             
@@ -459,6 +486,7 @@ class second():
             ## apply cuts on WFD time to select pulse for CT or LED analysis
             ## plot quantities vs run
             for trig in triggers:
+                timeCut = self.cutTimes[trig]
                 for x in WFDtime:
                     ts = WFDtime[x]
                     for t in ts:
@@ -482,6 +510,21 @@ class second():
                                     for tA in tAs:
                                         for tB in tBs:
                                             self.Hists[name].Fill(tB,tA)
+                # time difference with respect to signal ctr nearest LED
+                sA = self.LEDnextto
+                if sA is not None:
+                    if sA in WFDtime:
+                        for sB in self.signalCtrs:
+                            if sB!=sA and sB in WFDtime:
+                                for tA in WFDtime[sA]:
+                                    for tB in WFDtime[sB]:
+                                        dt = tB-tA
+                                        name = trig + '_WFD_dt_' + sB + '_' + sA + '_run' + cRun
+                                        self.Hists[name].Fill(dt)
+                                        if self.btwnL(tB,timeCut[sB]) and self.btwnL(tA,timeCut[sA]):
+                                            name = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_run' + cRun
+                                            self.Hists[name].Fill(dt)
+    
 
                 for x in WFDarea:
                     for areas in WFDarea[x]:
@@ -606,6 +649,8 @@ class second():
         return self.btwn(x,mean-nsig*sg,mean+nsig*sg)
     def btwn(self,x,xlo,xhi):
         return xlo<=x and x<=xhi
+    def btwnL(self,x,X):
+        return X[0]<=x and x<=X[1]
     def makeList(self,q):
         if isinstance(q, list) : return q
         return [q]
