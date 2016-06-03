@@ -68,7 +68,7 @@ class second():
 
         self.signalCtrs = ['S0','S1','S2','S3','S4','S5','S6','S7']
         self.hodoCtrs   = ['H0','H1','H2','H3','H4','H5']
-        self.allCtrs    = self.signalCtrs
+        self.allCtrs    = list(self.signalCtrs) # make copy of list
         self.allCtrs.extend( self.hodoCtrs )
 
         self.Run1 = self.Run2 = self.currentRun = None
@@ -231,7 +231,8 @@ class second():
             self.currentRun = runnum = int(run)
             print 'second.loop run',runnum,'event',
 
-
+            self.book(thisRun = self.currentRun) # per run hists
+            
             Events = self.f['Run/'+run+'/Event']
             for event in Events:
                 evtnum = int(event)
@@ -255,15 +256,36 @@ class second():
 
 
         return
-    def book(self):
+    def book(self,thisRun=None):
+        '''
+        book histograms.
+        if thisRun is null, then book all run-indep. and multi-run hists,
+        otherwise book the run-dependent hists
+        '''
         
-        self.Hists = {}
+        if thisRun is None: self.Hists = {}
+            
         tS = self.gU.getTDatime(self.tStart,self.timeFormat)
         tE = self.gU.getTDatime(self.tEnd,self.timeFormat)
 
         # WFD area #bins, range
         nArea, maxArea = 200, 2000.
         if self.LEDonly: nArea, maxArea = 500,500.
+
+        if thisRun is not None:
+            cRun = str(thisRun)
+            for itrig,trig in enumerate(self.trigList):
+                for iA,sA in enumerate(self.signalCtrs):
+                    for iB,sB in enumerate(self.signalCtrs):
+                        if iB>iA:
+                            nx,xmi,xma = 400,0.,400.
+                            ny,ymi,yma = nx,xmi,xma
+                            name = title = trig + '_WFD_time' + sA + '_vs_time' + sB + '_run' + cRun
+                            self.Hists[name] = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
+                        
+            print 'second.book booked hists for run',thisRun
+            return
+            
 
         runmi = float(self.Run1)-0.5
         runma = float(self.Run2)+0.5
@@ -396,7 +418,8 @@ class second():
         evtTime = self.gU.getTDatime(xt,fmt=self.timeFormat)
         #print 'second.analysis Time',Time[()], 'dt',dt, 'xt',xt, 'evtTime',evtTime
 
-
+        cRun = str(self.currentRun)
+        
         ### determine hodoscope trajectories
         Traj = []
         if 'CT' in triggers:
@@ -447,6 +470,19 @@ class second():
                             if i+1<len(ts):
                                 dt = ts[i+1]-t
                                 self.Hists[name].Fill(dt)
+                # analyze WFD time(signal ctr A) vs time(signal ctr B)
+                for iA,sA in enumerate(self.signalCtrs):
+                    if sA in WFDtime:
+                        tAs = WFDtime[sA]
+                        for iB,sB in enumerate(self.signalCtrs):
+                            if sB in WFDtime and iB>iA:
+                                tBs = WFDtime[sB]
+                                name = trig + '_WFD_time' + sA + '_vs_time' + sB + '_run' + cRun
+                                if name in self.Hists:
+                                    for tA in tAs:
+                                        for tB in tBs:
+                                            self.Hists[name].Fill(tB,tA)
+
                 for x in WFDarea:
                     for areas in WFDarea[x]:
                         name = trig+'_WFD_area_'+x
