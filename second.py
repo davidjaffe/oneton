@@ -31,6 +31,7 @@ class second():
         self.gU= graphUtils.graphUtils()
         self.pip= pipath.pipath()
 
+        self.requestedRuns = 'ALL'
 
         self.now = now = datetime.datetime.now()
         self.start_time = now
@@ -241,10 +242,18 @@ class second():
         '''
         loop over all events in file
         up to event number maxevt
+        20160707 add ability to only process requested runs
         '''
         evtFreq = max(1,min(1000,maxevt/10)) # frequency of debug print
+
+        if self.requestedRuns=='ALL':
+            runlist = (r for r in self.f['Run'])
+        else:
+            runlist = (r for r in self.f['Run'] if int(r) in self.requestedRuns )
+        #for r in runlist:print r
+        #sys.exit('TESTING')
         
-        for run in self.f['Run']:
+        for run in runlist:
             self.currentRun = runnum = int(run)
             print 'second.loop run',runnum,'event',
 
@@ -794,6 +803,31 @@ class second():
                 self.close()
         self.endroot(rfn)
         return rfn
+    def getRequestedRuns(self,L):
+        '''
+        parse input list of strings to get requested runs
+        '''
+        runs = []
+        for x in L:
+            if type(int(x)) is int: runs.append(int(x))
+        if len(L)>0:
+            if len(runs)>0:
+                self.requestedRuns = runs
+            else:
+                self.requestedRuns = None
+
+        print 'second.getRequestedRuns: Process',
+        if type(self.requestedRuns) is str:
+            print self.requestedRuns,
+        elif type(self.requestedRuns) is list:
+            print ', '.join(str(x) for x in self.requestedRuns),
+        elif self.requestedRuns is None:
+            print 'NO',
+        else:
+            print 'UNKNOWN',self.requestedRuns,
+        print 'runs'
+        return
+            
 if __name__ == '__main__' :
     
     maxevt = 9999999
@@ -804,4 +838,5 @@ if __name__ == '__main__' :
     if len(sys.argv)>3: inputFile = sys.argv[3]
 
     S = second(useLogger=True)
+    S.getRequestedRuns(sys.argv[4:])
     rfn = S.main(maxevt=maxevt,LEDonly=LEDonly,inputFile=inputFile)
