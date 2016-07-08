@@ -233,9 +233,13 @@ class second():
             
         Comments = self.f['Run/'+run+'/Comments'][()]
         for c in Comments.split('\n'):
+            #print 'second.parseComments',c
             if doThis=='LEDnextto':
                 if 'LED location' in c and 'Next to' in c:
                     nextToCtr = c[-2:]
+                    return nextToCtr
+                if 'LED next to' in c:
+                    nextToCtr = c[-3:].replace('.','')
                     return nextToCtr
         return None
     def loop(self,maxevt=99999999):
@@ -255,7 +259,9 @@ class second():
             self.currentRun = runnum = int(run)
             print 'second.loop run',runnum,'event',
 
-            self.LEDnextto = self.parseComments(run,'LEDnextto') # helpful for per run hists
+            self.LEDnextto = self.parseComments(run,doThis='LEDnextto') # helpful for per run hists
+            if self.LEDnextto is not None: print 'LED next to',self.LEDnextto
+            else: print 'LED not found next to signal counter'
             self.book(thisRun = self.currentRun) # per run hists
             
             Events = self.f['Run/'+run+'/Event']
@@ -296,7 +302,7 @@ class second():
         # WFD area #bins, range
         nArea, maxArea = 200, 2000.
         if self.LEDonly: nArea, maxArea = 500,500.
-        nAreaLEDtiming, maxAreaLEDtiming = 500,5000.
+        nAreaLEDtiming, maxAreaLEDtiming = 750,7500.
 
         if thisRun is not None:
             
@@ -318,6 +324,9 @@ class second():
                             self.Hists[name] = TH1D(name,title,nx,xmi,xma)
                             name = title = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_run' + cRun
                             self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+                            name = title = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_vs_Area_' + sB + '_run'+cRun
+                            ny,ymi,yma =  nAreaLEDtiming, 0., maxAreaLEDtiming 
+                            self.Hists[name] = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
             print 'second.book booked hists for run',thisRun
             return
             
@@ -532,13 +541,15 @@ class second():
                         for sB in self.signalCtrs:
                             if sB!=sA and sB in WFDtime:
                                 for tA in WFDtime[sA]:
-                                    for tB in WFDtime[sB]:
+                                    for tB,aB in zip(WFDtime[sB],WFDarea[sB]):
                                         dt = tB-tA
                                         name = trig + '_WFD_dt_' + sB + '_' + sA + '_run' + cRun
                                         self.Hists[name].Fill(dt)
                                         if self.btwnL(tB,timeCut[sB]) and self.btwnL(tA,timeCut[sA]):
                                             name = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_run' + cRun
                                             self.Hists[name].Fill(dt)
+                                            name = title = trig + '_WFD_dt_tcuts_' + sB + '_' + sA + '_vs_Area_' + sB + '_run'+cRun
+                                            self.Hists[name].Fill(dt,abs(aB))
     
 
                 for x in WFDarea:
