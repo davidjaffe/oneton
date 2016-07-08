@@ -250,8 +250,6 @@ class second():
             runlist = (r for r in self.f['Run'])
         else:
             runlist = (r for r in self.f['Run'] if int(r) in self.requestedRuns )
-        #for r in runlist:print r
-        #sys.exit('TESTING')
         
         for run in runlist:
             self.currentRun = runnum = int(run)
@@ -298,6 +296,7 @@ class second():
         # WFD area #bins, range
         nArea, maxArea = 200, 2000.
         if self.LEDonly: nArea, maxArea = 500,500.
+        nAreaLEDtiming, maxAreaLEDtiming = 500,5000.
 
         if thisRun is not None:
             
@@ -360,6 +359,11 @@ class second():
                 name,nx,xmi,xma = trig + '_WFD_Area_tcut_'+x,nArea,0.,maxArea
                 title = name.replace('_',' ')
                 self.Hists[name] = TH1D(name,title,nx,xmi,xma)
+
+                name,nx,xmi,xma,ny,ymi,yma = trig + '_WFD_Area_vs_time_'+x,100,0.,400.,nAreaLEDtiming,0.,maxAreaLEDtiming
+                title = name.replace('_',' ')
+                self.Hists[name] = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
+                 
                 if trig=='CT':
                     nx,xmi,xma = len(self.tKeys),-0.5,-0.5+float(len(self.tKeys))
                     ny,ymi,yma = 50,0.,1000.
@@ -519,6 +523,8 @@ class second():
                                     for tA in tAs:
                                         for tB in tBs:
                                             self.Hists[name].Fill(tB,tA)
+#                                            print name,'t('+sB+')',tB,'t('+sA+')',tA  #######
+                                            
                 # time difference with respect to signal ctr nearest LED
                 sA = self.LEDnextto
                 if sA is not None:
@@ -547,6 +553,11 @@ class second():
                         ts    = [y for y in WFDtime[x]]
                         areas = [y for y in WFDarea[x]]
                         for t,a in zip(ts,areas):
+
+                            name = trig + '_WFD_Area_vs_time_'+x
+                            self.Hists[name].Fill(t,abs(a))
+#                            print name,'time',t,'area',a   #######
+                            
                             if timeCut[x][0]<=t and t<=timeCut[x][1]:
                                 hits += 1
                                 if hits==1:  # ONLY ACCEPT FIRST HIT
@@ -701,7 +712,7 @@ class second():
             hlist = []
             for h in self.Hists:
                 if (phrase1) in h and (phrase2 in h): hlist.append(self.Hists[h])
-            if len(hlist)>0:
+            if len(hlist)>0 and len(hlist)<13:
                 hlist.sort()
                 fname = phrase1
                 if len(phrase2)>0: fname += '_'+phrase2
@@ -716,6 +727,7 @@ class second():
                 self.gU.drawMultiHists(hlist,fname=fname,figdir=self.figdir,setLogy=Logy,abscissaIsTime=abscissaIsTime,dopt=dopt,statOpt=sopt)
                 if 0 and 'vs_time' in phrase1.lower():
                     for x in hlist:  self.gU.reportHist(x)  #### FOR DEBUG
+            if len(hlist)>12: print 'second.endroot Do not draw',len(hlist),'hists for',phrase1,phrase2
 
         
         rf = TFile(rfn,"RECREATE")
