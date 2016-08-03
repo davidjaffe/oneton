@@ -28,14 +28,15 @@ class reader():
         self.incompleteEvents = {}
 
         # used by unpackTrigger
-        self.validTriggers = ['CT','M','LED','CT+M+LED'] # as of 20160106
+        self.validTriggers = ['CT','M','LED'] # as of 20160106
         self.triggerOR     = ['CT+M+LED']
-        self.uniqueTriggers = [x for x in self.validTriggers if x not in self.triggerOR]
-        #print 'reader__init__ self.uniqueTriggers',self.uniqueTriggers
+        self.uniqueTriggers = self.validTriggers
         
         self.gU = graphUtils.graphUtils()
 
         self.topLevelKeys = ['Run_Info','Events']
+        self.TDCchdesc = None
+        self.QDCchdesc = None
         
         print 'reader: initialized'
         return
@@ -83,6 +84,8 @@ class reader():
                 print 'XXXXXXXXXXXXXX NO CALIBRATION DATA IN FILE XXXXXXXXXXX'
                 if RequireCalib: OK = False
             self.EvtDir  = self.f['Events']
+            self.TDCchdesc = self.getModuleData('TDC','ChanDesc')
+            self.QDCchdesc = self.getModuleData('QDC','ChanDesc')
 
         if not OK:
             print '+++++ INCOMPLETE FILE ++++++ '
@@ -443,17 +446,16 @@ class reader():
         return list of triggers that fired based on TDC information
         excludin the OR of all triggers
         '''
-        TDCmd = self.getModuleData('TDC','ChanDesc')
+        if self.TDCchdesc is None:
+            self.TDCchdesc = self.getModuleData('TDC','ChanDesc')
         trigs = []
         for pair in raw:
             #print 'reader.unpackTrigger pair',pair
-            T = TDCmd[int(pair[0])]
-            if  T in self.validTriggers:
+            T = self.TDCchdesc[int(pair[0])]
+            if T in self.validTriggers:
                 trigs.append(T)
         # special treatment since LED signal is outside TDC dynamic range
-        if trigs==self.triggerOR : trigs.append('LED')
-        # exclude OR of all triggers
-        trigs.remove(self.triggerOR[0])
+        if len(trigs)==0 : trigs.append('LED')
         return trigs
     def unpackTemperature(self,raw):
         return raw['Event_Temp'][()]

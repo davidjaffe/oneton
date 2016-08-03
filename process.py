@@ -19,6 +19,7 @@ import calibThermocouple
 import writer
 from optparse import OptionParser
 import pipath
+import SaveAllEvts
 
 class process():
     def __init__(self,makeDirs=True):
@@ -37,10 +38,12 @@ class process():
         self.TDChistnames = {}
         self.refTDCs = ['S2','H0']
         self.WFHists = []
-
         self.Times = []
         self.rawTemps = []
         self.calTemps = []
+        self.AllTrigsfname = None
+        self.rootpyEvts = None
+        self.NoHists = False
 
         if makeDirs:
             now = datetime.datetime.now()
@@ -72,10 +75,20 @@ class process():
             print 'process__init__ Job start time',self.start_time.strftime('%Y/%m/%d %H:%M:%S')
 
         return
-    def start(self):
-        self.bookHists('TDC')
-        self.bookHists('QDC')
-        self.bookHists('WFD')
+    def start(self, StoreAllTriggers=False):
+        if not self.NoHists:
+            self.bookHists('TDC')
+            self.bookHists('QDC')
+            self.bookHists('WFD')
+        if StoreAllTriggers:
+            self.InitTree()
+            print('Initialized the tree.')
+        return
+    def InitTree(self):
+        if self.AllTrigsfname is None:
+            print('process.InitTree: the filename has not been defined!')
+            return
+        self.rootpyEvts = SaveAllEvts.rootpyEvts(self.AllTrigsfname)
         return
     def startRun(self,file=None,tG=False):
         '''
@@ -103,6 +116,8 @@ class process():
         if self.overlaps>0:
             print 'process.endRun recorded',self.overlaps,'overlaps of lo,hi range of an ADC channel'
         self.overlaps = 0
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.rfile.Flush()
         return
     def makeTvTgraphs(self):
         '''
@@ -137,6 +152,10 @@ class process():
         hdf5OutputFileName = None
         if self.writeRecon:
             hdf5OutputFileName = self.writer.closeFile()
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.rfile.Write()
+            self.rootpyEvts.rfile.Close()
+
         nwrite = 0
         if evtsSeen > 0:
             tvtgraphs  = self.makeTvTgraphs()
@@ -174,7 +193,7 @@ class process():
 
             else:
                 print 'process.finish Skip drawing hists and graphs'
-                
+
         # next line deletes all hists/trees from memory according to Rene Brun 3Apr2002
         gDirectory.GetList().Delete()
         print 'process.finish Wrote',nwrite,'objects to',rfn,'and deleted them from memory'
@@ -202,7 +221,9 @@ class process():
         if kind.lower()=='tdc':
             OK = True
             dx = self.R.getTDCConfig('width')
-            md = self.R.getModuleData('TDC','ChanDesc')
+            if self.R.TDCchdesc is None:
+                self.R.TDCchdesc = self.R.getModuleData('TDC','ChanDesc')
+            md = self.R.TDCchdesc
             # 1d : raw and in ns
             for w in md:
                 title = 'raw TDC ' + w.replace('+','or')
@@ -260,7 +281,9 @@ class process():
             #for key in TDChistnames: print 'TDChistnames['+key+']',TDChistnames[key]
         if kind=='QDC':
             OK = True
-            md = self.R.getModuleData('QDC','ChanDesc')
+            if self.R.QDCchdesc is None:
+                self.R.QDCchdesc = self.R.getModuleData('QDC','ChanDesc')
+            md = self.R.QDCchdesc
             clean = 'N/C' not in md
             while not clean:
                 md.remove('N/C')
@@ -325,7 +348,8 @@ class process():
         else:
             print 'process.bookHists Invalid input',kind
         return
-    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,dumpNZcode=False,timeTempOnly=True):
+    def eventLoop(self,maxEvt=99999999,dumpAll=False,dumpThres=0.9999,
+                  dumpNZcode=False,timeTempOnly=True,StoreAllTriggers=False):
         '''
         loop over events in order of increasing event number
         '''
@@ -339,12 +363,16 @@ class process():
 
         self.evtCode = {}
 
+        if self.rootpyEvts is not None:
+            self.rootpyEvts.tree.rnum = int(self.R.RunNumber)
+            
         integerKeys = []
         for key in EvtDir.keys():
             if key!='evt_table': integerKeys.append(key)
         
         sEvtKeys = sorted(integerKeys,key=lambda b: int(b))
         for evtkey in sEvtKeys: # sorted(EvtDir.keys()):
+            
             Event = EvtDir[evtkey]
             evtnum = int(evtkey)
             if evtnum>maxEvt: break
@@ -408,9 +436,70 @@ class process():
                 EN = self.writer.writeEvent(label,data,evtNo=evtnum)
                 label,data = 'Temp',self.aTemp
                 EN = self.writer.writeEvent(label,data,evtNo=evtnum)
-                                    
-                    
+            
+            if self.rootpyEvts is not None:
+                thetree = self.rootpyEvts.tree
+                thetree.evtnum = int(evtkey)
+                thetree.temp = self.cT.getCalibTC(Event['Event_Temp'].value)
+                thetree.time = Event['Event_Time'].value
+                thetree.QDC1 = [ch[1] for ch in Event['QDC_1']]
+                thetree.QDC2 = [ch[1] for ch in Event['QDC_2']]
+                thetree.TDCnumch = len(Event['TDC'])
+                thetree.scaler = [int(val) for val in Event['Scaler']]
+                trigstring = ''                
+                for trig in triggers: trigstring += trig + ' '
+                thetree.trigtype = trigstring.ljust(9)
+                
+                for i in range(len(Event['TDC'])):
+                    thetree.TDCch[i] = Event['TDC'][i][0]
+                    thetree.TDCval[i] = Event['TDC'][i][1]
+                
+                if not timeTempOnly:
+                    #note: channel names are assumed to be sampled from:
+                    # ['S0', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']
+                    #self.aWFD[channel name] goes like prenames:
+                    #[pedestal, pedestal stdev, npulse, nsubp, area, time]
+                    #I'm not sure what npulse and nsubp are, so I'm skipping them.
+                    thekeys = [k for k in self.aWFD.keys()
+                                if k is not 'RunEventNumber'
+                                and k is not 'prenames']
+                    for k in thekeys:
+                        areas = [0]*32
+                        times = [0]*32
+                        theidx = int(k[1])
+                        thetree.WFDped[theidx] = self.aWFD[k][0]
+                        thetree.WFDpedsd[theidx] = self.aWFD[k][1]
+                        for i in range(len(self.aWFD[k][4])):
+                            if i>31:
+                                print("WARNING: tried to save event with > 32 pulses. Only saving first 32...")
+                                therun, theevt = self.aWFD['RunEventNumber']                                
+                                print("Run = {0}, Event = {1}, channel = {2}".format(therun, theevt, k))
+                                break
+                            areas[i] = self.aWFD[k][4][i]
+                            times[i] = self.aWFD[k][5][i]
+                        setattr(thetree, k+'_area', areas)
+                        setattr(thetree, k+'_time', times)
 
+                self.rootpyEvts.tree.Fill()
+                self.reinitROOTf()                    
+        return
+
+    def reinitROOTf(self):
+        '''
+        This function reinitializes the root tree and should be called after
+        filling the tree.
+        '''
+        thetree = self.rootpyEvts.tree
+        thetree.TDCch = [0]*16
+        thetree.TDCval = [0]*16
+        thetree.QDC1 = [0]*16
+        thetree.QDC2 = [0]*16
+        thetree.WFDped = [0]*8
+        thetree.WFDpedsd = [0]*8        
+        for i in range(8):
+            prefix = 'S{0}_'.format(i)
+            setattr(thetree, prefix + 'area', [0]*32)
+            setattr(thetree, prefix + 'time', [0]*32)
         return
 
     def analTvT(self,raw,evtnum):
@@ -648,12 +737,14 @@ class process():
         return code = 0 = ok, otherwise not
         '''
         code = 0
-        runnum = self.R.getRunDetail('run')
+        runnum = self.R.RunNumber
         moniker = 'Run ' + str(runnum) + ' Event ' + str(evtnum)
         TL = ['All']
         TL.extend(self.R.unpackTrigger(raw['TDC']))
 
-        md = self.R.getModuleData('QDC','ChanDesc')
+        if self.R.QDCchdesc is None:
+            self.R.QDCchdesc = self.R.getModuleData('QDC','ChanDesc')
+        md = self.R.QDCchdesc
         while 'N/C' in md: md.remove('N/C')
         
         # create a dictionary with key = channel, value = list of QDC values (can have 2 entries, 1 for lo- and 1 for hi-range)
@@ -662,7 +753,19 @@ class process():
         rng = ['hi','lo'] # low,high range: hilo =1,0
         self.aQDC = {}
         for x in cd:
-            self.aQDC[x] = QDC[x]
+            if len(QDC[x]) == 1:
+                self.aQDC[x] = QDC[x]
+            elif len(QDC[x]) == 2:
+                #probably both ranges triggered, use the low one unless there is an overflow.
+                val = [data for data in QDC[x] if data[2]==1 and not data[3]==1]
+                if len(val) is not 0:
+                    self.aQDC[x] = val[0]
+                else:
+                    self.aQDC[x] = [data for data in QDC[x] if data[2] != 1]
+            else:
+                print('WARNING: more than 2 entries in a single QDC channel! Writing out zeroes to channel -1')
+                QDC[x][0] = (-1,0,0,0)
+                self.aQDC[x] = QDC[x][0]
             i = md.index(x)
             for y in QDC[x]:
                 #print 'process.analQDC x,QDC[x],y:',x,QDC[x],y
@@ -670,13 +773,14 @@ class process():
                     ch,v,hilo = y
                 else:
                     ch,v,hilo,ovfl = y # chan#, value, hirange or lowrange, overflow
-                for tl in TL:
-                    name = tl+'_QDC'+rng[hilo]+'_'+x
-                    self.Hists[name].Fill(v)
-                    name = tl+'_QDC_'+x
-                    self.Hists[name].Fill(v)
-                    name = 'chan_vs_QDC_'+tl
-                    self.Hists[name].Fill(v,float(i))
+                if not self.NoHists:
+                    for tl in TL:
+                        name = tl+'_QDC'+rng[hilo]+'_'+x
+                        self.Hists[name].Fill(v)
+                        name = tl+'_QDC_'+x
+                        self.Hists[name].Fill(v)
+                        name = 'chan_vs_QDC_'+tl
+                        self.Hists[name].Fill(v,float(i))
         
         for x in QDC:
             if len(QDC[x])>1 and x!='N/C':
@@ -723,17 +827,18 @@ class process():
                     print 'process.analWFD ',x,'setting code',code,'pTime',pTime
             #if code>0: a1,a2,a3,a4,a5,a6 = self.W.pulseAnal(WFD[x],x,debug=1)   ###### SPECIAL #####
             y = float(cd.index(x))
-            for tl in TL:
-                for i,pren in enumerate(prenames):
-                    name = pren+'_vs_WFD_'+tl
-                    #print 'i,pren,V[i]',i,pren,V[i]
-                    if pren=='ped' or pren=='pedsd':
-                        self.Hists[name].Fill(V[i],y)
-                    elif pren=='npulse':
-                        self.Hists[name].Fill(float(len(V[i])),y)
-                    else:
-                        for v in V[i]:
-                            self.Hists[name].Fill(float(v),y)
+            if not self.NoHists:
+                for tl in TL:
+                    for i,pren in enumerate(prenames):
+                        name = pren+'_vs_WFD_'+tl
+                        #print 'i,pren,V[i]',i,pren,V[i]
+                        if pren=='ped' or pren=='pedsd':
+                            self.Hists[name].Fill(V[i],y)
+                        elif pren=='npulse':
+                            self.Hists[name].Fill(float(len(V[i])),y)
+                        else:
+                            for v in V[i]:
+                                self.Hists[name].Fill(float(v),y)
         return code
     def dumpaWFD(self):
         '''
@@ -759,7 +864,9 @@ class process():
         return code = 0 = ok, otherwise not
         '''
         code = 0
-        TDCmd   = self.R.getModuleData('TDC','ChanDesc')
+        if self.R.TDCchdesc is None:
+            self.R.TDCchdesc = self.R.getModuleData('TDC','ChanDesc')
+        TDCmd = self.R.TDCchdesc
         Hists,TDChistnames = self.Hists,self.TDChistnames
         TL = ['All']
         TL.extend(self.R.unpackTrigger(raw))
@@ -778,34 +885,34 @@ class process():
 
         TDChits = []
 
-
-        for x in cd:
-            i = TDCmd.index(x)
-            TDChits.append(i)
-            Hists[TDChistnames['raw'+x]].Fill(rawCD[x][1])
-            for tl in TL:
-                Hists[TDChistnames[tl+x]].Fill(nsCD[x][1])
-        
-        for ref in self.refTDCs:
-            if ref in cd:
-                tref = nsCD[ref][1]
-                for x in cd:
-                    if x!=ref and ref[0]==x[0]:
-                        dt = nsCD[x][1]-tref
-                        for tl in TL:
-                            Hists[TDChistnames[tl+'dTDC'+x+'-'+ref]].Fill(dt)
-
-        for tl in TL:
-            name = 'chan_vs_TDC_' + tl
+        if not self.NoHists:
             for x in cd:
-                y = float(TDCmd.index(x))
-                Hists[name].Fill(nsCD[x][1],y)
+                i = TDCmd.index(x)
+                TDChits.append(i)
+                Hists[TDChistnames['raw'+x]].Fill(rawCD[x][1])
+                for tl in TL:
+                    Hists[TDChistnames[tl+x]].Fill(nsCD[x][1])
+        
+            for ref in self.refTDCs:
+                if ref in cd:
+                    tref = nsCD[ref][1]
+                    for x in cd:
+                        if x!=ref and ref[0]==x[0]:
+                            dt = nsCD[x][1]-tref
+                            for tl in TL:
+                                Hists[TDChistnames[tl+'dTDC'+x+'-'+ref]].Fill(dt)
+
+            for tl in TL:
+                name = 'chan_vs_TDC_' + tl
+                for x in cd:
+                    y = float(TDCmd.index(x))
+                    Hists[name].Fill(nsCD[x][1],y)
                             
-        # correlations between TDC channels
-        if len(TDChits)>0:
-            for x in TDChits:
-                for y in TDChits:
-                    if y>x: Hists['TDC_vs_TDC'].Fill(x,y)
+            # correlations between TDC channels
+            if len(TDChits)>0:
+                for x in TDChits:
+                    for y in TDChits:
+                        if y>x: Hists['TDC_vs_TDC'].Fill(x,y)
 
         return code
     def getFilePrefix(self,fn):
@@ -815,14 +922,29 @@ class process():
         '''
         #f = fn.split('/')[-1]
         f = os.path.basename(fn) 
-        return f.split('.')[0]
-    def getRawDataList(self,rawDataDir):
+        return os.path.splitext(f)[0]#Won't fail on periods in the filename.
+    def getRawDataList(self,rawDataDir, H5Files=False, excldirs=[]):
         '''
         return list of full path name of files in rawDataDir
-        cribbed from http://stackoverflow.com/questions/3207219/how-to-list-all-files-of-a-directory-in-python
+        cribbed from http://stackoverflow.com/questions/19859840/excluding-directories-in-os-walk
+        and http://stackoverflow.com/questions/13571134/python-how-to-recursively-go-through-all-subdirectories-and-read-files
+
+        Arguments:
+        - Base directory.
+        - Flag to use HDF5 files or zip files.
+        - A list of directories to exclude from the search.
         '''
-        onlyfiles = [os.path.join(rawDataDir,f) for f in os.listdir(rawDataDir) if os.path.isfile(os.path.join(rawDataDir, f))]
-        return onlyfiles
+        if H5Files:
+            ext = '.h5'
+        else:
+            ext = '.zip'
+        datafiles = []
+        for folder, subfolders, files in os.walk(rawDataDir, topdown=True):
+            subfolders[:] = [d for d in subfolders if d not in excldirs]
+            for thefile in files:
+                if os.path.splitext(thefile)[1]==ext and 'RunInfo.h5' not in thefile:
+                    datafiles.append(os.path.join(folder, thefile))
+        return datafiles
     def seeCalibData(self,rawDataDir):
         '''
         dump calib data for all runs in rawDataDir
@@ -882,6 +1004,18 @@ if __name__ == '__main__' :
                       help="Use compression in creation of output hdf5 file. options=lzf,gzip [default %default]")
     parser.add_option("--DoSPECalculation",action="store_true",
                       help="Do SPE calculation")
+    parser.add_option("-F", "--H5Files", action="store_true", dest="H5Files", default=False,
+                      help="Option to process .h5 files (rather than zipped HDF5 files)")
+    parser.add_option("-R", "--StoreAllTriggers", action="store_true",
+                      dest="StoreAllTriggers", default=False,
+                      help="Optionally store all triggers as a tree in the \
+                      ROOT file. This can make the output VERY big!")
+    parser.add_option("-E", "--ExcludeDirs", action="store", dest="excldirs",
+                      default = "", type="string",
+                      help="Exclude sub-dirs from the data file search if using -R. \
+                      Use paths to the base search directory, separated by a semicolon.")
+    parser.add_option('-H', '--NoHists', action='store_true',
+                      help='Don\'t calculate any histograms')
 
     (options, args) = parser.parse_args(args=sys.argv)
     #print 'options',options
@@ -899,11 +1033,15 @@ if __name__ == '__main__' :
     
     P = process()
     P.writeRecon = options.WriteRecon
-
+    P.NoHists=options.NoHists
     # get list of potential input files
-    rawDataDir = P.pip.fix("/Users/djaffe/work/1TonData/Filled_151217/")
+    if len(args) > 1:
+        rawDataDir = P.pip.fix(args[1])
+    else:
+        rawDataDir = os.getcwd()#Get current directory
     if options.MakeInputFileList: 
-        fnlist = P.getRawDataList(rawDataDir)
+        excldirs = options.excldirs.split(";")
+        fnlist = P.getRawDataList(rawDataDir, options.H5Files, excldirs)
     else:
         fnlist = P.defaultFileList()
 
@@ -924,6 +1062,7 @@ if __name__ == '__main__' :
     f1,f2 = P.getFilePrefix(f[0]),P.getFilePrefix(f[-1])
     rfn = P.outputdir
     if len(rfn)>0 and rfn[-1]!=os.path.sep : rfn += os.path.sep # ensure dir name ends in separator
+    #Make filename for output    
     g = [f1]
     if f1!=f2: g.append(f2)
     for q in g:
@@ -931,6 +1070,8 @@ if __name__ == '__main__' :
         if len(g)>1 and '-' not in rfn: rfn += '-'
     outputFilePrefix = rfn
     rfn += '.root'
+    if options.StoreAllTriggers:
+        P.AllTrigsfname = outputFilePrefix + '_alltrigs.root'
     print 'process.main Output root file name is',rfn
     reconfn = outputFilePrefix + '.h5'
     if options.WriteRecon:
@@ -942,8 +1083,11 @@ if __name__ == '__main__' :
     first = True
     for fn in fnlist:
         if P.startRun(file=fn):
-            if first: P.start()
-            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,timeTempOnly=options.TemperatureVsTime,dumpNZcode=dumpNZcode)
+            if first: P.start(StoreAllTriggers=options.StoreAllTriggers)
+            P.eventLoop(nevt,dumpAll=dumpAll,dumpThres=dumpThres,
+                        timeTempOnly=options.TemperatureVsTime,
+                        dumpNZcode=dumpNZcode,
+                        StoreAllTriggers=options.StoreAllTriggers)
             P.endRun()
             first = False
     hdf5OutputFileName = P.finish(rfn=rfn, Draw=Draw)
