@@ -399,7 +399,7 @@ class graphUtils():
         else:
             canvas.Print(ps,'Landscape')
             os.system('ps2pdf ' + ps + ' ' + pdf)
-            if os.path.exists(pdf): os.remove(ps)
+#            if os.path.exists(pdf): os.remove(ps)
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas
