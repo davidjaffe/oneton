@@ -331,6 +331,8 @@ class graphUtils():
         else:
             pdf = figdir + name  + '.pdf'
             ps  = figdir + name  + '.ps'
+        #print 'ps=',ps
+        #print 'pip.fix',self.pip.fix(figdir + '/' + name + '.ps')
 
         xsize,ysize = 1100,850 # landscape style
         noPopUp = True
@@ -399,7 +401,7 @@ class graphUtils():
         else:
             canvas.Print(ps,'Landscape')
             os.system('ps2pdf ' + ps + ' ' + pdf)
-#            if os.path.exists(pdf): os.remove(ps)
+            if os.path.exists(pdf): os.remove(ps)
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas

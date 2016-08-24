@@ -5,6 +5,7 @@ process uv-vis data
 '''
 import os
 import graphUtils
+import ROOT
 
 class uvvis_proc():
     def __init__(self):
@@ -50,9 +51,49 @@ class uvvis_proc():
             name,x,y = self.readFile(fn)
             dictUVmeas[name] = [x,y]
         return dictUVmeas
-    def plotSome(self,dictUVmeas,match=None):
+    def readSegelstein(self,fn='/Users/djaffe/work/UVvisData/segelstein81.dat'):
         '''
-        graph data in dictUVmeas with key that contains string match
+        return wavelength(nm) and absorption(1/cm) measured by Segelstein from
+        http://omlc.org/spectra/water/data/segelstein81.dat on 20160823
+        '''
+        f = open(fn,'r')
+        i = 0
+        wavelength,absorption = [],[]
+        for line in f:
+            i+=1
+            if i>5:
+                s = line.split()
+                wavelength.append(float(s[0]))
+                absorption.append(float(s[1]))
+        f.close()
+        return wavelength,absorption
+    def drawSegelstein(self,wavelength,absorption,wlmin=100.,wlmax=1000.):
+        '''
+        plot data from Segelstein
+        '''
+        name = 'Segelstein_water_transparency'
+        title = name.replace('_',' ')
+        if wlmin<wlmax:
+            title += ' wavelengths=('+str(wlmin)+','+str(wlmax)+') nm'
+            wl,a = [],[]
+            for x,y in zip(wavelength,absorption):
+                if wlmin<=x and x<=wlmax:
+                    wl.append(x)
+                    a.append(y)
+        else:
+            wl,a = wavelength,absorption
+        g = self.gU.makeTGraph(wl,a,title,name)
+        g.GetXaxis().SetTitle('Wavelength (nm)')
+        g.GetYaxis().SetTitle('Absorption (1/cm)')
+        self.gU.color(g,1,1,setMarkerType=False)
+        self.gU.drawGraph(g,figDir='UVVIS_Results/')
+        self.gU.drawGraph(g,figDir='UVVIS_Results/',SetLogy=True)
+        self.gU.drawGraph(g,figDir='UVVIS_Results/',SetLogy=True,SetLogx=True)
+        return
+                                  
+    def graphSome(self,dictUVmeas,match=None,figdir='UVVIS_Results/'):
+        '''
+        return tmultigraph of data in dictUVmeas with key that contains string match
         '''
         graphs = []
         tmg = None
@@ -68,16 +109,27 @@ class uvvis_proc():
                 i+=1
                 tmg.Add(g)
                 
-        self.gU.drawMultiGraph(tmg,xAxisLabel='Wavelength(nm)',yAxisLabel='Relative absorbance',abscissaIsTime=False)
-        return
+        self.gU.drawMultiGraph(tmg,figdir=figdir,xAxisLabel='Wavelength(nm)',yAxisLabel='Relative absorbance',abscissaIsTime=False)
+        return tmg
         
 if __name__ == '__main__' :
     UVP = uvvis_proc()
-    fn = '../../UVvisData/1Ton_Filled_151217/Baseline_160509.txt'
-    h,x,y = UVP.readFile(fn)
-    print 'header',h,'len(x)',len(x),'len(y)',len(y),'x[3]',x[3],'y[3]',y[3]
-    d = UVP.readAll('../../UVvisData/1Ton_Filled_151217/')
-    print 'len(d)',len(d)
-    UVP.plotSome(d,match='_IN_')
-    UVP.plotSome(d,match='Baseline')
-    UVP.plotSome(d,match='_OUT_')
+    if 0:
+        fn = '../../UVvisData/1Ton_Filled_151217/Baseline_160509.txt'
+        h,x,y = UVP.readFile(fn)
+        print 'header',h,'len(x)',len(x),'len(y)',len(y),'x[3]',x[3],'y[3]',y[3]
+    dn = '../../UVvisData/1Ton_Filled_151217/'
+    d = UVP.readAll(dn)
+    print 'Parsed',len(d),'data files in',dn
+    TMG = []
+    for match in ['_IN_','Baseline','_OUT_']:
+        TMG.append( UVP.graphSome(d,match=match) )
+    x,y = UVP.readSegelstein()
+    UVP.drawSegelstein(x,y)
+    
+        
+    rfn = 'UVVIS_Results/plots.root'
+    rf = ROOT.TFile(rfn,"RECREATE")
+    for g in TMG: rf.WriteTObject(g)
+    rf.Close()
+    print 'Wrote',len(TMG),'multigraphs to',rfn
