@@ -806,7 +806,7 @@ class process():
                 
         runnum = self.R.getRunDetail('run')
         pretitle = 'r'+str(runnum)+'e'+str(evtnum)
-        WFD = self.R.assocWFD(raw,pedsub=True)
+        WFD = self.R.assocWFD(raw,pedsub=False)#pedsub=True)
         cd = sorted(WFD.keys())
         prenames = ['ped','pedsd','npulse','nsubp','area','time']
         debug = 0
