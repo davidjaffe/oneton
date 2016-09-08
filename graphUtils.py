@@ -306,7 +306,7 @@ class graphUtils():
 
         return
         
-    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None,NLegendColumns=None, debugMG = False):
+    def drawMultiGraph(self,TMG,figdir='',SetLogy=False, SetLogx=False, abscissaIsTime = True, drawLines=True, xAxisLabel=None,yAxisLabel=None,NLegendColumns=None, maxTitleLength=9999999, debugMG = False):
         '''
         draw TMultiGraph with legend and output as pdf
         Default is that abscissa is calendar time.
@@ -324,6 +324,13 @@ class graphUtils():
         if debugMG: print 'graphUtils.drawMultiGraph',title,name,'TMG.GetListOfGraphs()',TMG.GetListOfGraphs(),'TMG.GetListOfGraphs().GetSize()',TMG.GetListOfGraphs().GetSize()
         nGraphs = TMG.GetListOfGraphs().GetSize()
 
+        if len(title)>maxTitleLength and 'splitline' not in title:
+            for i in range(maxTitleLength,len(title)):
+                if title[i]==' ': break
+            t1 = title[:i]
+            t2 = title[i:]
+            title = '#splitline{'+t1+'}{'+t2+'}'
+            TMG.SetTitle(title)
 
         if len(figdir)>0 and figdir[-1] != os.path.sep:
             pdf = self.pip.fix(figdir + '/' + name + '.pdf')
@@ -342,7 +349,7 @@ class graphUtils():
         canvas.SetLogx(SetLogx)
 
         # move title to left in order to put legend above plot
-        gStyle.SetTitleX(0.3)
+        gStyle.SetTitleX(0.3+0.025)
         x1 = 0.5
         x2 = x1 + .5
         y1 = 0.9
