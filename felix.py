@@ -62,23 +62,28 @@ class felix():
         i.e., same solvent with same excitation wavelength
         '''
         debugThis = False
-        
+
+        alreadyDone = [] # prevent analysis of duplicate [solvent,scint] pairs
+
+                
         like = self.collect(results)
-        print 'like.keys()',like.keys()
+        if debugThis: print 'felix.analyzeLikeResults like.keys()',like.keys()
         offset = 'EmissionScan'
         for key in ['Sphere_bisMSB','Sphere_PPO']:
             for base in ['LAB_ex','ETOH_ex']:
+                if debugThis: print '\nfelix.analyzeLikeResults key',key,'like[key]',like[key],'base',base
                 for msmtName in like[key]:
+                    if debugThis: print 'felix.analyzeLikeResults msmtName',msmtName
                     if base in msmtName:
                         exWL1 = results[msmtName][4]
                         baseNames = [msmtName]
                         for name in like[key]:
-                            if name!=msmtName:
+                            if name not in baseNames:
                                 exWL2 = results[name][4]
                                 if exWL1==exWL2:
                                     baseNames.append(name)
                         if len(baseNames)>1:
-                            if debugThis : print '\nfelix.analyzeLikeResults',msmtName
+                            if debugThis : print '\nfelix.analyzeLikeResults',msmtName,baseNames
                             sDict,fDict = {},{} # dictionaries of like msmts for solvent,fluor. key=name solvent or fluor
                             for name in baseNames:
                                 sf,isSolvent,isFluor = self.solventOrFluor(name,offset=offset)
@@ -97,24 +102,26 @@ class felix():
                                 else:
                                     print 'felix.analyzeLikeResults: FAIL',name,'NOT SOLVENT OR FLUOR'
                             if debugThis:
-                                for k in sDict: print k,' '.join([w for w in sDict[k]])
-                                for k in fDict: print k,' '.join([w for w in fDict[k]])
+                                for k in sDict: print 'felix.analyzeLikeResults',k,' '.join([w for w in sDict[k]])
+                                for k in fDict: print 'felix.analyzeLikeResults',k,' '.join([w for w in fDict[k]])
                             for s in sDict:
                                 for solvent in sDict[s]:
                                     for f in fDict:
                                         for fluor in fDict[f]:
-                                            QYresults = self.getQY(solvent,fluor,results)
+                                            if [solvent,fluor] not in alreadyDone:
+                                                QYresults = self.getQY(solvent,fluor,results,plot=True,draw=True)
+                                                alreadyDone.append( [solvent,fluor] )
             
 
         return
-    def getQY(self,solvent,scint,results,plot=True):
+    def getQY(self,solvent,scint,results,plot=True,draw=False):
         '''
         interface to QY calculation
         inputs: solvent name=key, scint name=key, dict of results
                 boolean plot
         output: QY, uncertainties
         '''
-        debug = True
+        debug = False
         
         ## stupidity check
         if solvent not in results or scint not in results:
@@ -135,36 +142,86 @@ class felix():
             return None
         
         rawQY,L  = self.analQY1( sWL, sexWL, sRaw, fRaw  ,debug=debug)
-        meanWLraw,sRawBL,fRawBL,Araw,Eraw = L
+        meanWLraw,sRawBL,fRawBL,Araw,Eraw, Limits = L
         if plot:
             self.icol = 1
-            tmg = self.gU.makeTMultiGraph(solvent)
-            tmg.Add( self.makeGraph(sWL, sRaw,   solvent, 'raw') )
-            tmg.Add( self.makeGraph(sWL, sRawBL, solvent, 'rawBL') )
-            tmg.Add( self.makeGraph(sWL, fRaw,   scint,   'raw') )
-            tmg.Add( self.makeGraph(sWL, fRawBL, scint,   'rawBL') )
-            tmg.Add( self.makeGraph(sWL, Araw,   scint,   'Abs') )
-            tmg.Add( self.makeGraph(sWL, Eraw,   scint,   'Emiss') )
-            self.TMG[solvent] = tmg
-            self.gU.drawMultiGraph(tmg, figdir=self.figdir, abscissaIsTime=False, xAxisLabel = 'Wavelength (nm)')
+            mgName = self.uniqName(solvent,scint,usedNames=self.TMG.keys(),debug=False)
+            tmg = self.gU.makeTMultiGraph(mgName,debug=False)
+            g =  self.makeGraph(sWL, sRaw,   solvent, 'raw')
+            tmg.Add(g)
+            g =  self.makeGraph(sWL, sRawBL, solvent, 'rawBL', limits=Limits[0])
+            tmg.Add(g)
+            g = self.makeGraph(sWL, fRaw,   scint,   'raw') 
+            tmg.Add(g)
+            g =  self.makeGraph(sWL, fRawBL, scint,   'rawBL', limits=Limits[0]) 
+            tmg.Add(g)
+            g = self.makeGraph(sWL, Araw,   scint,   'Abs', limits=Limits[0]) 
+            tmg.Add(g)
+            g = self.makeGraph(sWL, Eraw,   scint,   'Emiss', limits=Limits[1]) 
+            tmg.Add(g)
+            if mgName in self.TMG:
+                sys.exit('felix.getQY ERROR duplicate multigraph name ' + mgName)
+            self.TMG[mgName] = tmg
+            if draw: self.gU.drawMultiGraph(tmg, figdir=self.figdir, abscissaIsTime=False, xAxisLabel = 'Wavelength (nm)',maxTitleLength=35)
 
         
         corrQY,L = self.analQY1( sWL, sexWL, sCorr,fCorr ,debug=debug)
-        meanWLcorr,sCorrBL,fCorrBL,Acorr,Ecorr = L
+        meanWLcorr,sCorrBL,fCorrBL,Acorr,Ecorr,Limits = L
         QYresults = [rawQY, corrQY]
         if debug:
             print '\nfelix.getQY:',solvent,scint
             print '      rawQY {0:.3f} corrQY {1:.3f}'.format(rawQY,corrQY)
         return QYresults
-    def makeGraph(self,X,Y,Name,Suffix):
+    def uniqName(self,name1,name2,usedNames=None,debug=False):
+        '''
+        return unique name suitable for TGraph from name1,name2
+        suitable means no blanks and no '.'
+        '''
+        s1,s2 = self.uniqString(name1,name2)
+        name = (s1 + '_' + s2).replace(' ','_').replace('.','x')
+        if name in usedNames:
+            for b in ['_'+str(i) for i in range(100)]:
+                if name+b not in usedNames:
+                    name = name+b
+                    break
+        if debug: print 'felix.uniqName',name,'\nname1',name1,'\nname2',name2
+        return name
+    def uniqString(self,s1,s2,compareEnd=False):
+        '''
+        return unique parts of strings s1 and s2 by comparing beginning and end of strings
+        '''
+
+        l1,l2 = len(s1),len(s2)
+        for i in range(min(l1,l2)):
+            if s1[i]!=s2[i]: break
+        if s1[i]==s2[i]: i += 1 # deals with case where s1[:l1]==s2[:l2]
+
+        j1,j2 = l1,l2
+        if compareEnd:
+            while j1>=i and j2>=i:
+                if s1[j1-1]!=s2[j2-1]: break
+                j1 -= 1
+                j2 -= 1
+        return s1[i:j1],s2[i:j2]
+    def makeGraph(self,X,Y,Name,Suffix,limits=None):
         '''
         return TGraph with name generated from Name and Suffix and line, point color from global icol
         add TGraph to global dict
+        use limits to restrict abscissa range and corresponding ordinate values
         '''
         icol = self.icol
         title = Name.replace('_',' ') + ' ' + Suffix
         name  = Name.replace('.','x') + '_' + Suffix
-        g = self.gU.makeTGraph(list(X),list(Y),title,name)
+        if limits is None:
+            x,y = list(X),list(Y)
+        else:
+            x,y = [],[]
+            for u,v in zip(X,Y):
+                if u>limits[1]: break
+                if limits[0]<=u:
+                    x.append(u)
+                    y.append(v)
+        g = self.gU.makeTGraph(x,y,title,name)
         self.graphs[name] = g
         g.GetXaxis().SetTitle('Wavelength (nm)')
         self.gU.color(g,icol,icol,setMarkerType=False)
@@ -296,6 +353,7 @@ class felix():
         ahi=alo+peakSideBand
         blo=exWL+peakR
         bhi=blo+peakSideBand
+        absLimits = [alo,bhi]
         Xsb,Ysb = self.getBaseline(WL,solvent,alo=alo,ahi=ahi,blo=blo,bhi=bhi,Method=1)
         Xfb,Yfb = self.getBaseline(WL,scint  ,alo=alo,ahi=ahi,blo=blo,bhi=bhi,Method=1)
         sA = numpy.subtract(solvent,Ysb)
@@ -306,20 +364,23 @@ class felix():
         # emission peak analysis: use solvent spectrum as baseline for scint
         E = numpy.subtract(scint,solvent) # for baseline subtraction of emission spectrum
         emission,n = self.integrateBetween(WL,E,minEm,maxEm)
+        emiLimits = [minEm,maxEm]
+        Limits = [ absLimits, emiLimits ]
         
         QY = -1.
         if absorption>0.: QY = emission / absorption
 
         if debug: print 'felix.analQY1 emission',emission,'absorption',absorption,'QY','{0:.3f}'.format(QY)
         
-        return QY,[meanWL,Ysb,Yfb,A,E]
-    def getBaseline(self,X,Y,alo=None,ahi=None,blo=None,bhi=None,Method=0):
+        return QY,[meanWL,Ysb,Yfb,A,E, Limits]
+    def getBaseline(self,X,Y,alo=None,ahi=None,blo=None,bhi=None,Method=0,allPoints=True):
         '''
         return numpy arrays U,V giving estimated baseline of Y from lower sideband (alo,ahi) and/or upper sideband (blo,bhi)
         based on Method
         Method = 0 : simple average of sidebands
         Method = 1 : linear interpolation of sidebands iff two sidebands given, otherwise revert to Method=0
         Method = other => use Method=0
+        if allPoints, then output arrays have same length as input, otherwise truncate to upper,lower sideband limits
         '''
         a,b = None,None
         if alo is not None and ahi is not None:
@@ -347,8 +408,15 @@ class felix():
         else:
             m = 0.
             b = (y1+y2)/2.
-        U = numpy.array(X)
-        V = numpy.add(numpy.multiply(X,m),b)
+        if allPoints:
+            U = numpy.array(X)
+        else:
+            u = []
+            for x in X:
+                if x>bhi: break
+                if alo<=x: u.append(x)
+            U = numpy.array(u)
+        V = numpy.add(numpy.multiply(U,m),b)
         return U,V
     
     def integrateBetween(self,x,y,xlo,xhi,getMeanX=False):
@@ -511,12 +579,37 @@ if __name__ == '__main__' :
     if 0:
         print F.getMsmtName('/Users/djaffe/work/GIT/QY/Henry/SyncScans/lampChange/empyIS_72.txt')
         sys.exit(1)
+    if 0:
+        os2 = s2 = 'Sphere_bisMSB_LAB_EmissionScan_bisMSBinLAB_4x47mgL_ex350_2sec_160824_raw'
+        os1 = s1 = 'Sphere_bisMSB_LAB_EmissionScan_LAB_ex350_2sec_raw'
+        print '\ns1',s1
+        print 's2',s2
+        t1,t2 = F.uniqString(s1,s2)
+        print 't1',t1
+        print 't2',t2
+        s2 = os1 + 'here I am'
+        print '\ns1',s1
+        print 's2',s2
+        t1,t2 = F.uniqString(s1,s2)
+        print 't1',t1
+        print 't2',t2
+        sys.exit(2)
+
+        
     F.loopy()
+
+    bleat = False
     rfn = 'Felix_Results/plots.root'
     rf = ROOT.TFile(rfn,"RECREATE")
-
-    for g in F.graphs: rf.WriteTObject(F.graphs[g])
-    for g in F.TMG: rf.WriteTObject(F.TMG[g])
+    rf.cd() # see last item in https://root.cern.ch/phpBB3/viewtopic.php?t=17596
+    print 'produced',len(F.graphs),'graphs and',len(F.TMG),'multigraphs'
+    for g in F.graphs:
+        if bleat: print 'writing graph',g,F.graphs[g]
+        rf.WriteTObject(F.graphs[g]) 
+    for g in F.TMG:
+        if bleat: print 'writing multigraph',g,F.TMG[g]
+        rf.WriteTObject(F.TMG[g])
+        
     rf.Close()
     print 'Wrote',len(F.graphs)+len(F.TMG),'objects to',rfn
 
