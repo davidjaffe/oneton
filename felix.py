@@ -19,6 +19,10 @@ class felix():
         self.TMG = {}
         self.icol = 1
 
+        self.peakWidth = 5.0
+        self.peakSideBand = 2.
+        self.emissionWidth = 200. 
+
         self.figdir = 'Felix_Results/'
 
         self.fluors = ['bisMSB','POPOP','PPO']
@@ -64,7 +68,8 @@ class felix():
         debugThis = False
 
         alreadyDone = [] # prevent analysis of duplicate [solvent,scint] pairs
-
+        iQY = 0
+        QYresults = {}
                 
         like = self.collect(results)
         if debugThis: print 'felix.analyzeLikeResults like.keys()',like.keys()
@@ -109,17 +114,37 @@ class felix():
                                     for f in fDict:
                                         for fluor in fDict[f]:
                                             if [solvent,fluor] not in alreadyDone:
-                                                QYresults = self.getQY(solvent,fluor,results,plot=True,draw=True)
-                                                alreadyDone.append( [solvent,fluor] )
+                                                for QYmethod in [0,1]:
+                                                    QYresults[iQY] = self.getQY(solvent,fluor,results,plot=True,draw=True,QYmethod=QYmethod)
+                                                    iQY += 1
+                                                    alreadyDone.append( [solvent,fluor] )
             
+        if 1:
+            iQYmax = iQY
+            for iQY in range(iQYmax):
+                #print 'iQY',iQY,'QYresults[iQY]',QYresults[iQY]
+                solvent,scint = QYresults[iQY]['solventAndScint']
+                sQY = 'felix.getQY: QY'
+                exWL = results[solvent][4]
+                sexWL = 'felix.getQY: ex. WL(nm) ' + str(exWL) + ' '
+                for mode in ['raw','corr']:
+                    QY,L,QYmethod = QYresults[iQY][mode]
+                    meanWL = L[0]
+                    sQY += ' {0} {1:.3f}'.format(mode,QY)
+                    sexWL += ' {0} {1:.2f} {2:.2f}'.format(mode,meanWL[0],meanWL[1])
+                print '\nfelix.getQY: QYmethod',QYmethod,solvent,scint
+                print sQY
+                print sexWL
 
         return
-    def getQY(self,solvent,scint,results,plot=True,draw=False):
+    def getQY(self,solvent,scint,results,plot=True,draw=False,QYmethod=0):
         '''
         interface to QY calculation
         inputs: solvent name=key, scint name=key, dict of results
                 boolean plot
-        output: QY, uncertainties
+        output: dict containing solvent & scint names,
+                                QY, mean excitation wavelengths from data,
+                                baseline spectra, absorption spectrum, emission spectrum
         '''
         debug = False
         
@@ -131,6 +156,8 @@ class felix():
         sWL, sRaw, sCorr, sexInt, sexWL, sdatetime = results[solvent]
         fWL, fRaw, fCorr, fexInt, fexWL, fdatetime = results[scint]
 
+
+
         ## additional stupidity checks
         if sexWL!=fexWL:
             print 'felix.getQY: ERROR mis-match in excitation WL. solvent',sexWL,'scint',fexWL
@@ -140,45 +167,73 @@ class felix():
         if not goodWL:
             print 'felix.getQY: ERROR mis-match in length or content of WL for solvent and scint. Lengths',len(sWL),len(fWL)
             return None
-        
-        rawQY,L  = self.analQY1( sWL, sexWL, sRaw, fRaw  ,debug=debug)
-        meanWLraw,sRawBL,fRawBL,Araw,Eraw, Limits = L
-        if plot:
-            self.icol = 1
-            mgName = self.uniqName(solvent,scint,usedNames=self.TMG.keys(),debug=False)
-            tmg = self.gU.makeTMultiGraph(mgName,debug=False)
-            g =  self.makeGraph(sWL, sRaw,   solvent, 'raw')
-            tmg.Add(g)
-            g =  self.makeGraph(sWL, sRawBL, solvent, 'rawBL', limits=Limits[0])
-            tmg.Add(g)
-            g = self.makeGraph(sWL, fRaw,   scint,   'raw') 
-            tmg.Add(g)
-            g =  self.makeGraph(sWL, fRawBL, scint,   'rawBL', limits=Limits[0]) 
-            tmg.Add(g)
-            g = self.makeGraph(sWL, Araw,   scint,   'Abs', limits=Limits[0]) 
-            tmg.Add(g)
-            g = self.makeGraph(sWL, Eraw,   scint,   'Emiss', limits=Limits[1]) 
-            tmg.Add(g)
-            if mgName in self.TMG:
-                sys.exit('felix.getQY ERROR duplicate multigraph name ' + mgName)
-            self.TMG[mgName] = tmg
-            if draw: self.gU.drawMultiGraph(tmg, figdir=self.figdir, abscissaIsTime=False, xAxisLabel = 'Wavelength (nm)',maxTitleLength=35)
 
-        
-        corrQY,L = self.analQY1( sWL, sexWL, sCorr,fCorr ,debug=debug)
-        meanWLcorr,sCorrBL,fCorrBL,Acorr,Ecorr,Limits = L
-        QYresults = [rawQY, corrQY]
-        if debug:
-            print '\nfelix.getQY:',solvent,scint
-            print '      rawQY {0:.3f} corrQY {1:.3f}'.format(rawQY,corrQY)
+        QYresults = {'solventAndScint' : [solvent,scint]}
+        for mode in ['raw','corr']:
+            sData,fData = None,None
+            if mode=='raw': sData,fData = sRaw,fRaw
+            if mode=='corr':sData,fData = sCorr,fCorr
+
+            if QYmethod==1:
+                Limits = [ [min(sWL),sexWL-self.peakWidth-self.peakSideBand],
+                           [sexWL+self.peakWidth+self.peakSideBand+self.emissionWidth, max(sWL)] ]
+                fData = self.adjustBaseline(sWL, fData, sData, Limits)
+                
+                
+            QY,L = self.analQY1( sWL,sexWL, sData,fData, debug=debug)
+            meanWL,sBL,fBL,A,E,Limits,peakWidth = L
+            QYresults[mode] = [QY,L,QYmethod]
+
+            if plot:
+                self.icol = 1
+                mgName = self.uniqName(solvent,scint,suffix=mode,usedNames=self.TMG.keys(),debug=False)
+                tmg = self.gU.makeTMultiGraph(mgName,debug=False)
+                mgA = self.uniqName(solvent,scint,suffix=mode+'A',usedNames=self.TMG.keys(),debug=False)
+                tmgA= self.gU.makeTMultiGraph(mgA,debug=False)
+                mgE = self.uniqName(solvent,scint,suffix=mode+'E',usedNames=self.TMG.keys(),debug=False)
+                tmgE= self.gU.makeTMultiGraph(mgE,debug=False)
+                mgR = self.uniqName(solvent,scint,suffix=mode+'R',usedNames=self.TMG.keys(),debug=False)
+                tmgR= self.gU.makeTMultiGraph(mgR,debug=False)
+
+                g = self.makeGraph(sWL, numpy.subtract(fData,sData), scint, mode+'Diff')
+                tmgR.Add(g)
+                g = self.makeGraph(sWL, numpy.subtract(fBL,sBL),     scint, mode+'BLdiff', limits=Limits[0])
+                tmgR.Add(g)
+                
+
+                g =  self.makeGraph(sWL, sData,   solvent, mode)
+                tmg.Add(g)
+                g =  self.makeGraph(sWL, sBL, solvent, mode+'BL', limits=Limits[0])
+                tmg.Add(g)
+                tmgA.Add(g)
+                g = self.makeGraph(sWL, fData,   scint,   mode) 
+                tmg.Add(g)
+                g =  self.makeGraph(sWL, fBL, scint,   mode+'BL', limits=Limits[0]) 
+                tmg.Add(g)
+                tmgA.Add(g)
+                g = self.makeGraph(sWL, A,   scint,   mode+'Abs', limits=Limits[0]) 
+                tmg.Add(g)
+                tmgA.Add(g)
+                g = self.makeGraph(sWL, E,   scint,   mode+'Emiss', limits=Limits[1]) 
+                tmg.Add(g)
+                tmgE.Add(g)
+                for mgN,tm in zip([mgName,mgA,mgE,mgR],[tmg,tmgA,tmgE,tmgR]):
+                    if mgN in self.TMG:
+                        sys.exit('felix.getQY ERROR duplicate multigraph name ' + mgN)
+                    self.TMG[mgN] = tm
+                if draw:
+                    for tm in [tmg,tmgA,tmgE,tmgR]:
+                        self.gU.drawMultiGraph(tm, figdir=self.figdir, abscissaIsTime=False, xAxisLabel = 'Wavelength (nm)',maxTitleLength=35)
+                    
         return QYresults
-    def uniqName(self,name1,name2,usedNames=None,debug=False):
+    def uniqName(self,name1,name2,suffix=None, usedNames=None,debug=False):
         '''
         return unique name suitable for TGraph from name1,name2
         suitable means no blanks and no '.'
         '''
         s1,s2 = self.uniqString(name1,name2)
         name = (s1 + '_' + s2).replace(' ','_').replace('.','x')
+        if suffix is not None: name += '_'+suffix
         if name in usedNames:
             for b in ['_'+str(i) for i in range(100)]:
                 if name+b not in usedNames:
@@ -332,14 +387,13 @@ class felix():
         WL are the wavelengths in nm where measurements were made
         exWL is the excitation wavelength
         '''
-        peakR = 5.0
-        peakSideBand = 2.
+        peakWidth = peakR = self.peakWidth
+        peakSideBand = self.peakSideBand
         peakB = peakR + peakSideBand
-        emissionWidth = 200.
+        emissionWidth = self.emissionWidth
 
         minEm = exWL + peakB
         maxEm = minEm + emissionWidth
-
 
         # analysis check. How close is measured excitation wavelength to specified wavelength
         meanWL = []
@@ -372,7 +426,20 @@ class felix():
 
         if debug: print 'felix.analQY1 emission',emission,'absorption',absorption,'QY','{0:.3f}'.format(QY)
         
-        return QY,[meanWL,Ysb,Yfb,A,E, Limits]
+        return QY,[meanWL,Ysb,Yfb,A,E, Limits, peakWidth]
+    def adjustBaseline(self,X,Y,Yref,limits):
+        '''
+        return Y with baseline adjusted to agree with baseline of Yref within abscissa range(s) specified by limits
+        '''
+        if len(limits)<1:
+            sys.exit('felix.adjustBaseline ERROR No input limits specified')
+        alo,ahi = limits[0]
+        blo,bhi = None,None
+        if len(limits)>1: blo,bhi = limits[1]
+        if len(limits)>2: print 'felix.adjustBaseline WARNING Only using first two of ',str(len(limits)),' input abscissa range limits'
+        xBL,yBL = self.getBaseline(X,Yref,alo=alo,ahi=ahi,blo=blo,bhi=bhi,Method=0,allPoints=True)
+        Ynew = numpy.add(Y,yBL)
+        return Ynew
     def getBaseline(self,X,Y,alo=None,ahi=None,blo=None,bhi=None,Method=0,allPoints=True):
         '''
         return numpy arrays U,V giving estimated baseline of Y from lower sideband (alo,ahi) and/or upper sideband (blo,bhi)
