@@ -387,9 +387,11 @@ class graphUtils():
                     if xAxisLabel is not None: g.GetXaxis().SetTitle(xAxisLabel)
                     if yAxisLabel is not None: g.GetYaxis().SetTitle(yAxisLabel)
                 g.Draw(dOption)
+                if debugMG: print 'graphUtils.drawMultiGraph: Draw',g.GetName()
                 dOption = dOption.replace("A","")
         else:
             TMG.Draw(dOption)
+            if debugMG: print 'graphUtils.drawMultiGraph: Draw',TMG.GetName()
             if xAxisLabel is not None: TMG.GetXaxis().SetTitle(xAxisLabel)
             if yAxisLabel is not None: TMG.GetYaxis().SetTitle(yAxisLabel)
             if abscissaIsTime : self.fixTimeDisplay(TMG)
@@ -423,6 +425,10 @@ class graphUtils():
         return tmg
     def labelTMultiGraph(self,tmg,xAxisLabel=None,yAxisLabel=None,debug=False):
         name = tmg.GetName()
+        if not tmg.GetXaxis() or tmg.GetYaxis() :
+            if debug: 'graphUtils.labelTMultiGraph name',name,'not drawn so cannot label axes'
+            return
+        if debug : print 'graphUtils.labelTMultiGraph name',name,'tmg',tmg,'tmg.GetXaxis()',tmg.GetXaxis(),'tmg.GetYaxis()',tmg.GetYaxis()
         if 'vs' in name:
             s = name.split('_')
             xt = s[2]
