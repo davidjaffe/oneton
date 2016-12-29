@@ -127,7 +127,7 @@ class graphUtils():
         if axis==3: nbins = h.GetNbinsZ()
         overflow = h.GetBinContent(nbins+1)
         return N,mean,stddev,underflow,overflow
-    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False):
+    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False,abscissaIsTime=False):
         '''
         output graph to file
         '''
@@ -147,11 +147,14 @@ class graphUtils():
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
         canvas = TCanvas(pdf,title,xsize,ysize)
 
+        if abscissaIsTime: self.fixTimeDisplay(g)
         
         g.Draw(option)
 
         if SetLogy: canvas.SetLogy(1)
         if SetLogx: canvas.SetLogx(1)
+
+        if abscissaIsTime: self.fixTimeDisplay(g)
     
         canvas.Draw()
         canvas.SetGrid(1)
@@ -221,9 +224,10 @@ class graphUtils():
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return
-    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False):
+    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True):
         '''
         draw multiple histograms on single pdf output file
+        20161228 histlist can be a list of lists. hists in innermost list are overlaid.
         '''
         nHist = len(histlist)
         if nHist<=0:
@@ -255,8 +259,13 @@ class graphUtils():
             ctitle = fname
         else:
             for h in histlist:
-                name = h.GetName()
-                ctitle += name
+                if type(h) is list:
+                    for hh in h:
+                        name = hh.GetName()
+                        ctitle += name
+                else:
+                    name = h.GetName()
+                    ctitle += name
                 if h!=histlist[-1]:
                     ctitle += '_'
 
@@ -284,11 +293,21 @@ class graphUtils():
         for i,h in enumerate(histlist):
             canvas.cd(i+1).SetLogy(setLogy)
             canvas.cd(i+1).SetLogx(setLogx)
-            if abscissaIsTime : self.fixTimeDisplay(h)
 
-            h.Draw(dopt)
-            self.biggerLabels(h)
-            if abscissaIsTime : self.fixTimeDisplay(h)
+
+            if type(h) is list:
+                prefix = ''
+                for hh in h:
+                    if abscissaIsTime : self.fixTimeDisplay(hh)
+                    hh.Draw(dopt+prefix)
+                    prefix = 'same'
+                    if biggerLabels : self.biggerLabels(hh)
+                    if abscissaIsTime:self.fixTimeDisplay(hh)
+            else:
+                if abscissaIsTime : self.fixTimeDisplay(h)
+                h.Draw(dopt)
+                if biggerLabels : self.biggerLabels(h)
+                if abscissaIsTime : self.fixTimeDisplay(h)
             #print i+1,h.GetName()
 
         self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
