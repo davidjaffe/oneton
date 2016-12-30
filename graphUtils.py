@@ -224,7 +224,7 @@ class graphUtils():
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return
-    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True):
+    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None):
         '''
         draw multiple histograms on single pdf output file
         20161228 histlist can be a list of lists. hists in innermost list are overlaid.
@@ -288,6 +288,7 @@ class graphUtils():
         canvas = TCanvas(pdf,title,xsize,ysize)
 
         gStyle.SetOptStat(statOpt)
+        if fitOpt is not None: gStyle.SetOptFit(fitOpt)
         spaceBtwnPads = 0.01 / 1000.
         canvas.Divide(nX,nY,spaceBtwnPads,spaceBtwnPads)
         for i,h in enumerate(histlist):
@@ -300,12 +301,14 @@ class graphUtils():
                 for hh in h:
                     if abscissaIsTime : self.fixTimeDisplay(hh)
                     hh.Draw(dopt+prefix)
+                    if 'func' in dopt.lower() : hh.Draw('funcsame')
                     prefix = 'same'
                     if biggerLabels : self.biggerLabels(hh)
                     if abscissaIsTime:self.fixTimeDisplay(hh)
             else:
                 if abscissaIsTime : self.fixTimeDisplay(h)
                 h.Draw(dopt)
+                if 'func' in dopt.lower() : h.Draw('funcsame')
                 if biggerLabels : self.biggerLabels(h)
                 if abscissaIsTime : self.fixTimeDisplay(h)
             #print i+1,h.GetName()
