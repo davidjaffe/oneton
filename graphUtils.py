@@ -10,7 +10,7 @@ import sys
 import os
 import math
 import ROOT 
-from ROOT import TH1D, TFile, gROOT, TCanvas, TLegend, TGraph, TDatime, TMultiGraph, gStyle, TGraphErrors, TLine
+from ROOT import TH1D, TFile, gROOT, TCanvas, TLegend, TGraph, TDatime, TMultiGraph, gStyle, TGraphErrors, TLine, TH2D
 from array import array
 import re # regular expression
 import pipath
@@ -74,6 +74,21 @@ class graphUtils():
             print 'graphUtils.fixTimeDisplay: WARNING Null pointer passed to fixTimeDisplay?????'
         return
 
+    def makeTH2D(self,u,v,title,name,nx=40,xmi=1.,xma=-1.,ny=40,ymi=1.,yma=-1.):
+        ''' book, fill 2d hist '''
+        if xmi>xma :
+            xmi,xma = min(u),max(u)
+            dx = (xma-xmi)/float(nx)
+            xmi -= dx
+            xma += dx
+        if ymi>yma :
+            ymi,yma = min(v),max(v)
+            dy = (yma-ymi)/float(ny)
+            ymi -= dy
+            yma -= dy
+        h = TH2D(name,title,nx,xmi,xma,ny,ymi,yma)
+        for x,y in zip(u,v): h.Fill(x,y)
+        return h
     def makeTH1D(self,v,title,name,nx=100,xmi=1,xma=-1):
         if xmi>xma:
             xmi = min(v)
