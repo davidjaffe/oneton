@@ -142,7 +142,7 @@ class graphUtils():
         if axis==3: nbins = h.GetNbinsZ()
         overflow = h.GetBinContent(nbins+1)
         return N,mean,stddev,underflow,overflow
-    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False,abscissaIsTime=False):
+    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False,abscissaIsTime=False,xLimits=None,yLimits=None):
         '''
         output graph to file
         '''
@@ -170,6 +170,9 @@ class graphUtils():
         if SetLogx: canvas.SetLogx(1)
 
         if abscissaIsTime: self.fixTimeDisplay(g)
+
+        if xLimits is not None: g.GetXaxis().SetRangeUser(xLimits[0],xLimits[1])
+        if yLimits is not None: g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
     
         canvas.Draw()
         canvas.SetGrid(1)
@@ -239,7 +242,7 @@ class graphUtils():
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return
-    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None):
+    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None):
         '''
         draw multiple histograms on single pdf output file
         20161228 histlist can be a list of lists. hists in innermost list are overlaid.
@@ -252,8 +255,9 @@ class graphUtils():
             nX = nY = 1
         else:
             nX = 2
+            if forceNX is not None: nX = forceNX
             nY = int(float(nHist)/float(nX) + 0.5)
-            if nHist<4: nX,nY = 1,nHist
+            if nHist<4 and forceNX is None: nX,nY = 1,nHist
 
         #print 'nHist,nX,nY=',nHist,nX,nY
         # create output directory if it does not exist
@@ -309,6 +313,8 @@ class graphUtils():
         for i,h in enumerate(histlist):
             canvas.cd(i+1).SetLogy(setLogy)
             canvas.cd(i+1).SetLogx(setLogx)
+            canvas.cd(i+1).SetGridx(Grid)
+            canvas.cd(i+1).SetGridy(Grid)
 
 
             if type(h) is list:
