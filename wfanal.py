@@ -14,7 +14,7 @@ class wfanal():
     def __init__(self):
         print 'wfanal: initialized'
         return
-    def pulseAnal(self,v,detel,pedsub=True,debug=0):
+    def pulseAnal(self,v,detel,pedsub=True,debug=0,nsd = 5.):
         '''
         main routine
         return (flat) pedestal estimate, std.dev. of pedestal estimate,
@@ -25,7 +25,7 @@ class wfanal():
         # pulse definition parameters        
         top = 5
         if pedsub: top = 100
-        nsd = 5.
+        
         ipre,ipost = 4,4
         minWidth = 3
         hFrac    = 0.3

@@ -11,7 +11,8 @@ import sys
 class Logger(object):
     def __init__(self,fn='logfile.log'):
         self.terminal = sys.stdout
-        self.log = open(fn, "a")
+        self.log = open(fn, "w",1)  # 20170120 changed "a" = append to "w" = write. added 3d argument: buffering by line
+        print 'Logger directing to',fn
 
     def write(self, message):
         self.terminal.write(message)
