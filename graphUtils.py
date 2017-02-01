@@ -232,17 +232,17 @@ class graphUtils():
         canvas.Update()
         ct = None
         if ctitle is not None:
-            ct = ROOT.TText(0.5,0.975,ctitle)
+            ct = ROOT.TText(0.5,0.975+0.013,ctitle) # 20170120 move title up a tiny bit
             ct.SetTextAlign(20) # horizontally centered
             s = ct.GetTextSize()
-            ct.SetTextSize(s/2.) 
+            ct.SetTextSize(s/2./2.) # 20170120 make title text smaller to avoid interference with individual hist titles
             ct.Draw()
         
         canvas.Print(ps,'Landscape')
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return
-    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None):
+    def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None,changeColors=False,addLegend=False):
         '''
         draw multiple histograms on single pdf output file
         20161228 histlist can be a list of lists. hists in innermost list are overlaid.
@@ -292,7 +292,7 @@ class graphUtils():
             ctitle += '_logx'
         if setLogy:
             ctitle += '_logy'
-        if base[-1] != os.path.sep:
+        if len(base)>0 and base[-1] != os.path.sep:
             pdf = self.pip.fix(base + '/' + ctitle + '.pdf')
             ps = self.pip.fix(base + '/' + ctitle + '.ps')
         else:
@@ -317,15 +317,19 @@ class graphUtils():
             canvas.cd(i+1).SetGridy(Grid)
 
 
-            if type(h) is list:
+            if type(h) is list: # overlay
                 prefix = ''
-                for hh in h:
+                
+                if addLegend: lg = self.createLegend(h)
+                for icol,hh in enumerate(h):
                     if abscissaIsTime : self.fixTimeDisplay(hh)
+                    if changeColors: hh.SetLineColor(self.goodColors[icol])
                     hh.Draw(dopt+prefix)
                     if 'func' in dopt.lower() : hh.Draw('funcsame')
                     prefix = 'same'
                     if biggerLabels : self.biggerLabels(hh)
                     if abscissaIsTime:self.fixTimeDisplay(hh)
+                if addLegend: lg.Draw()
             else:
                 if abscissaIsTime : self.fixTimeDisplay(h)
                 h.Draw(dopt)
@@ -335,6 +339,135 @@ class graphUtils():
             #print i+1,h.GetName()
 
         self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
+        return
+    def drawMultiObjects(self,objlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',gopt='AP',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None,changeColors=False,addLegend=False):
+        '''
+        draw multiple objects (histograms, multiple hists, graphs, multigraphs) on single pdf output file
+        20161228 histlist can be a list of lists. hists in innermost list are overlaid.
+        '''
+        nObj = len(objlist)
+        if nObj<=0:
+            print 'graphUtils.drawMultiObjects: ERROR zero length input list'
+            return
+        if nObj==1:
+            nX = nY = 1
+        else:
+            nX = 2
+            if forceNX is not None: nX = forceNX
+            nY = int(float(nObj)/float(nX) + 0.5)
+            if nObj<4 and forceNX is None: nX,nY = 1,nObj
+
+        #print 'nObj,nX,nY=',nObj,nX,nY
+        # create output directory if it does not exist
+        if len(figdir)>0:
+            if os.path.isdir(figdir):
+               pass
+            else:
+                try:
+                    os.mkdir(figdir)
+                except IOError,e:
+                    print 'graphUtils.drawMultiObjects:',e
+                else:
+                    print 'graphUtils.drawMultiObjects: created',figdir
+        # set output file name and canvas title
+        base = figdir        
+        ctitle = None
+        if fname!='':
+            ctitle = fname
+        else:
+            for h in objlist:
+                if type(h) is list:
+                    for hh in h:
+                        name = hh.GetName()
+                        ctitle += name
+                else:
+                    name = h.GetName()
+                    ctitle += name
+                if h!=objlist[-1]:
+                    ctitle += '_'
+
+        if setLogx:
+            ctitle += '_logx'
+        if setLogy:
+            ctitle += '_logy'
+        if len(base)>0 and base[-1] != os.path.sep:
+            pdf = self.pip.fix(base + '/' + ctitle + '.pdf')
+            ps = self.pip.fix(base + '/' + ctitle + '.ps')
+        else:
+            pdf = base + ctitle + '.pdf'
+            ps = base + ctitle + '.ps'
+        
+        # open canvas, draw on it
+        title = ''
+        xsize,ysize = 1100,850 # landscape style
+        noPopUp = True
+        if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
+        canvas = TCanvas(pdf,title,xsize,ysize)
+
+        gStyle.SetOptStat(statOpt)
+        if fitOpt is not None: gStyle.SetOptFit(fitOpt)
+        spaceBtwnPads = 0.01 / 1000.
+        canvas.Divide(nX,nY,spaceBtwnPads,spaceBtwnPads)
+        for i,h in enumerate(objlist):
+            if type(setLogy) is list:
+                canvas.cd(i+1).SetLogy(setLogy[i])
+            else:
+                canvas.cd(i+1).SetLogy(setLogy)
+            canvas.cd(i+1).SetLogx(setLogx)
+            canvas.cd(i+1).SetGridx(Grid)
+            canvas.cd(i+1).SetGridy(Grid)
+
+            ROOT.gStyle.SetOptFit(0)
+
+            if type(h) is list: # overlay
+                prefix = ''
+                gopt1 = gopt
+                
+                if addLegend: lg = self.createLegend(h)
+                for icol,hh in enumerate(h):
+                    if abscissaIsTime : self.fixTimeDisplay(hh)
+                    if changeColors: hh.SetLineColor(self.goodColors[icol])
+
+                    self.Draw(hh,dopt=dopt+prefix,gopt=gopt1,showFit=True)
+                    gopt1 = gopt1.replace('A','').replace('a','')
+                    prefix = 'same'
+                    if biggerLabels : self.biggerLabels(hh)
+                    if abscissaIsTime:self.fixTimeDisplay(hh)
+                if addLegend: lg.Draw()
+            else:
+                if abscissaIsTime : self.fixTimeDisplay(h)
+                    
+                self.Draw(h,dopt=dopt,gopt=gopt,showFit=True)
+                
+                if biggerLabels : self.biggerLabels(h)
+                if abscissaIsTime : self.fixTimeDisplay(h)
+            #print i+1,h.GetName()
+
+        self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
+        return
+    def objWasFit(self,obj):
+        ''' True if object was fitted'''
+        wasFit = False
+        for a in obj.GetListOfFunctions():
+            if 'TF1' in a.ClassName(): wasFit = True
+        return wasFit
+    def Draw(self,obj,dopt='',gopt='APL',showFit=True):
+        '''
+        Draw input object using options dopt or gopt
+        if showFit, add fit results
+        '''
+        if 0 : print 'graphUtils.Draw obj',obj
+        cName = obj.ClassName()
+        if 'TH1' in cName or 'TH2' in cName:
+            obj.Draw(dopt)
+            if showFit:
+                if self.objWasFit(obj):
+                    ROOT.gStyle.SetOptFit(1111)
+                    obj.Draw("func same")
+        elif 'TGraph' in cName or 'TMultiGraph'==cName:
+            obj.Draw(gopt)
+        else:
+            print 'graphUtils.Draw WARNING Incapable of drawing',cName
         return
     def biggerLabels(self,h):
         '''
@@ -457,6 +590,18 @@ class graphUtils():
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas
+    def createLegend(self,objlist,x1=0.5,y1=0.8,popt="L"):
+        '''
+        return TLegend object from input list of objects
+        x1,y1 = 0.5,0.9 places legend in upper left corner of pad
+        '''
+        x2 = x1 + .5
+        y2 = y1 + .1
+        lg = TLegend(x1,y1,x2,y2)
+        for obj in objlist:
+            t = obj.GetTitle()
+            lg.AddEntry(obj, t, popt )
+        return lg
     def makeTMultiGraph(self,name,tit=None,debug=False):
         title = tit
         if tit is None:title = name.replace('_',' ')
