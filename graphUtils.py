@@ -155,6 +155,7 @@ class graphUtils():
              pdf = self.pip.fix(figDir + '/' + name + '.pdf')
         else:
              pdf   = figDir + name + '.pdf'
+        ps = pdf.replace('.pdf','.ps')
         if verbose: print 'drawing Graph:',pdf
 
     
@@ -185,16 +186,8 @@ class graphUtils():
         if yLimits is not None:
             g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
             g.GetYaxis().SetLimits(yLimits[0],yLimits[1])
-    
-        canvas.Draw()
-        canvas.SetGrid(1)
-        canvas.SetTicks(1)
-        canvas.cd()
-        canvas.Modified()
-        canvas.Update()
-        canvas.Print(pdf,'pdf')
-        canvas.IsA().Destructor(canvas) # avoids seg fault?
 
+        self.finishDraw(canvas,ps,pdf)
         return
     def drawFit(self,h,figdir='',SetLogy=False,SetLogx=False,extraName=None):
         '''
