@@ -15,6 +15,7 @@ from array import array
 import re # regular expression
 import pipath
 
+
 class graphUtils():
     def __init__(self):
     # use in color()
@@ -142,7 +143,7 @@ class graphUtils():
         if axis==3: nbins = h.GetNbinsZ()
         overflow = h.GetBinContent(nbins+1)
         return N,mean,stddev,underflow,overflow
-    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False,abscissaIsTime=False,xLimits=None,yLimits=None):
+    def drawGraph(self,g,figDir="",SetLogx=False,SetLogy=False,option='APL', verbose=False,abscissaIsTime=False,xLimits=None,yLimits=None,noPopUp=False):
         '''
         output graph to file
         '''
@@ -158,11 +159,17 @@ class graphUtils():
 
     
         xsize,ysize = 1100,850 # landscape style
-        noPopUp = True
+#        noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
         canvas = TCanvas(pdf,title,xsize,ysize)
 
         if abscissaIsTime: self.fixTimeDisplay(g)
+        if xLimits is not None:
+            g.GetXaxis().SetRangeUser(xLimits[0],xLimits[1])
+            g.GetXaxis().SetLimits(xLimits[0],xLimits[1])
+        if yLimits is not None:
+            g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
+            g.GetYaxis().SetLimits(yLimits[0],yLimits[1])
         
         g.Draw(option)
 
@@ -171,8 +178,13 @@ class graphUtils():
 
         if abscissaIsTime: self.fixTimeDisplay(g)
 
-        if xLimits is not None: g.GetXaxis().SetRangeUser(xLimits[0],xLimits[1])
-        if yLimits is not None: g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
+        if abscissaIsTime: self.fixTimeDisplay(g)
+        if xLimits is not None:
+            g.GetXaxis().SetRangeUser(xLimits[0],xLimits[1])
+            g.GetXaxis().SetLimits(xLimits[0],xLimits[1])
+        if yLimits is not None:
+            g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
+            g.GetYaxis().SetLimits(yLimits[0],yLimits[1])
     
         canvas.Draw()
         canvas.SetGrid(1)
@@ -181,6 +193,8 @@ class graphUtils():
         canvas.Modified()
         canvas.Update()
         canvas.Print(pdf,'pdf')
+        canvas.IsA().Destructor(canvas) # avoids seg fault?
+
         return
     def drawFit(self,h,figdir='',SetLogy=False,SetLogx=False,extraName=None):
         '''
@@ -237,10 +251,12 @@ class graphUtils():
             s = ct.GetTextSize()
             ct.SetTextSize(s/2./2.) # 20170120 make title text smaller to avoid interference with individual hist titles
             ct.Draw()
-        
-        canvas.Print(ps,'Landscape')
-        os.system('ps2pdf ' + ps + ' ' + pdf)
-        if os.path.exists(pdf): os.remove(ps)
+        if ps is not None:
+            canvas.Print(ps,'Landscape')
+            os.system('ps2pdf ' + ps + ' ' + pdf)
+            if os.path.exists(pdf): os.remove(ps)
+
+        canvas.IsA().Destructor(canvas) # avoids seg fault?
         return
     def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None,changeColors=False,addLegend=False):
         '''
@@ -257,6 +273,7 @@ class graphUtils():
             nX = 2
             if forceNX is not None: nX = forceNX
             nY = int(float(nHist)/float(nX) + 0.5)
+            nY = int(math.ceil (float(nHist)/float(nX)))
             if nHist<4 and forceNX is None: nX,nY = 1,nHist
 
         #print 'nHist,nX,nY=',nHist,nX,nY
@@ -327,24 +344,28 @@ class graphUtils():
                     hh.Draw(dopt+prefix)
                     if 'func' in dopt.lower() : hh.Draw('funcsame')
                     prefix = 'same'
-                    if biggerLabels : self.biggerLabels(hh)
+                    self.biggerLabels(hh, biggerLabels)
                     if abscissaIsTime:self.fixTimeDisplay(hh)
                 if addLegend: lg.Draw()
             else:
                 if abscissaIsTime : self.fixTimeDisplay(h)
                 h.Draw(dopt)
                 if 'func' in dopt.lower() : h.Draw('funcsame')
-                if biggerLabels : self.biggerLabels(h)
+                self.biggerLabels(h, biggerLabels)
                 if abscissaIsTime : self.fixTimeDisplay(h)
             #print i+1,h.GetName()
 
         self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
         return
-    def drawMultiObjects(self,objlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',gopt='AP',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None,changeColors=False,addLegend=False):
+    def drawMultiObjects(self,objlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,
+                         dopt='',gopt='AP',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,
+                         forceNX=None,changeColors=False,addLegend=False,debug=False,noPopUp=True):
         '''
         draw multiple objects (histograms, multiple hists, graphs, multigraphs) on single pdf output file
         20161228 histlist can be a list of lists. hists in innermost list are overlaid.
         '''
+
+        
         nObj = len(objlist)
         if nObj<=0:
             print 'graphUtils.drawMultiObjects: ERROR zero length input list'
@@ -355,9 +376,10 @@ class graphUtils():
             nX = 2
             if forceNX is not None: nX = forceNX
             nY = int(float(nObj)/float(nX) + 0.5)
+            nY = int(math.ceil (float(nObj)/float(nX)))
             if nObj<4 and forceNX is None: nX,nY = 1,nObj
 
-        #print 'nObj,nX,nY=',nObj,nX,nY
+        if debug : print 'graphUtils.drawMultiObjects nObj,nX,nY=',nObj,nX,nY
         # create output directory if it does not exist
         if len(figdir)>0:
             if os.path.isdir(figdir):
@@ -400,7 +422,7 @@ class graphUtils():
         # open canvas, draw on it
         title = ''
         xsize,ysize = 1100,850 # landscape style
-        noPopUp = True
+        #noPopUp = True
         if noPopUp : gROOT.ProcessLine("gROOT->SetBatch()")
         canvas = TCanvas(pdf,title,xsize,ysize)
 
@@ -417,7 +439,10 @@ class graphUtils():
             canvas.cd(i+1).SetGridx(Grid)
             canvas.cd(i+1).SetGridy(Grid)
 
-            ROOT.gStyle.SetOptFit(0)
+            if 'func' in dopt.lower() :
+                ROOT.gStyle.SetOptFit(1111)
+            else:
+                ROOT.gStyle.SetOptFit(0)
 
             if type(h) is list: # overlay
                 prefix = ''
@@ -427,54 +452,61 @@ class graphUtils():
                 for icol,hh in enumerate(h):
                     if abscissaIsTime : self.fixTimeDisplay(hh)
                     if changeColors: hh.SetLineColor(self.goodColors[icol])
-
-                    self.Draw(hh,dopt=dopt+prefix,gopt=gopt1,showFit=True)
+                    if debug : print 'graphUtils.drawMultiObjects i+1,hh.ClassName()',i+1,hh.ClassName()
+                    self.Draw(hh,dopt=dopt+prefix,gopt=gopt1,showFit='func' in dopt.lower(),debug=debug)
                     gopt1 = gopt1.replace('A','').replace('a','')
                     prefix = 'same'
-                    if biggerLabels : self.biggerLabels(hh)
+                    self.biggerLabels(hh, biggerLabels)
                     if abscissaIsTime:self.fixTimeDisplay(hh)
                 if addLegend: lg.Draw()
             else:
                 if abscissaIsTime : self.fixTimeDisplay(h)
-                    
-                self.Draw(h,dopt=dopt,gopt=gopt,showFit=True)
-                
-                if biggerLabels : self.biggerLabels(h)
+                if debug : print 'graphUtils.drawMultiObjects i+1,h.ClassName()',i+1,h.ClassName()
+                self.Draw(h,dopt=dopt,gopt=gopt,showFit='func' in dopt.lower(),debug=debug)
+                self.biggerLabels(h, biggerLabels)
                 if abscissaIsTime : self.fixTimeDisplay(h)
-            #print i+1,h.GetName()
+
 
         self.finishDraw(canvas,ps,pdf,ctitle=ctitle)
         return
     def objWasFit(self,obj):
-        ''' True if object was fitted'''
+        '''
+        return True if input object was fitted
+        '''
         wasFit = False
         for a in obj.GetListOfFunctions():
-            if 'TF1' in a.ClassName(): wasFit = True
+            if 'TF1' in a.ClassName():
+                print 'graphUtils.objWasFit obj.GetName()',obj.GetName(),'a,a.ClassName(),a.GetName()',a,a.ClassName(),a.GetName()
+                wasFit = True
         return wasFit
-    def Draw(self,obj,dopt='',gopt='APL',showFit=True):
+    def Draw(self,obj,dopt='',gopt='APL',showFit=True,debug=False):
         '''
         Draw input object using options dopt or gopt
         if showFit, add fit results
         '''
-        if 0 : print 'graphUtils.Draw obj',obj
         cName = obj.ClassName()
+        if debug : print 'graphUtils.Draw obj,cName,dopt,gopt,showFit',obj,cName,dopt,gopt,showFit
+        wasFit = showFit and self.objWasFit(obj)
+        if wasFit: ROOT.gStyle.SetOptFit(1111)
         if 'TH1' in cName or 'TH2' in cName:
             obj.Draw(dopt)
-            if showFit:
-                if self.objWasFit(obj):
-                    ROOT.gStyle.SetOptFit(1111)
-                    obj.Draw("func same")
+            if wasFit: obj.Draw("func same")
         elif 'TGraph' in cName or 'TMultiGraph'==cName:
             obj.Draw(gopt)
         else:
             print 'graphUtils.Draw WARNING Incapable of drawing',cName
         return
-    def biggerLabels(self,h):
+    def biggerLabels(self,h,Factor=2.0):
         '''
         increase axis label size
 
+        default factor of 2.0 was determined empirically
+        Check on type of factor for backward compat
         '''
-        factor = 2.0 # empirically determined
+        factor = Factor
+        if type(Factor) is bool:
+            if not Factor : return 
+            factor = 2.0 # empirically determined
         sx = h.GetXaxis().GetLabelSize()
         h.GetXaxis().SetLabelSize(factor*sx)
         sy = h.GetYaxis().GetLabelSize()
@@ -584,13 +616,21 @@ class graphUtils():
         if 0:
             canvas.Print(pdf,'pdf')
         else:
-            canvas.Print(ps,'Landscape')
-            os.system('ps2pdf ' + ps + ' ' + pdf)
-            if os.path.exists(pdf): os.remove(ps)
+            self.canvasPrint(canvas,ps)
+#            canvas.Print(ps,'Landscape')
+#            os.system('ps2pdf ' + ps + ' ' + pdf)
+#            if os.path.exists(pdf): os.remove(ps)
 
         if debugMG: print 'graphUtils.drawMultiGraph',title,'complete'
         return canvas
+    def canvasPrint(self,canvas,ps):
+        canvas.Print(ps,'Landscape')
+        pdf = ps.replace('.ps','.pdf')
+        os.system('ps2pdf ' + ps + ' ' + pdf)
+        if os.path.exists(pdf): os.remove(ps)
+        return 
     def createLegend(self,objlist,x1=0.5,y1=0.8,popt="L"):
+        
         '''
         return TLegend object from input list of objects
         x1,y1 = 0.5,0.9 places legend in upper left corner of pad
@@ -638,6 +678,9 @@ class graphUtils():
             if debug: print 'graphUtils.labelTMultiGraph:yAxisLabel',yAxisLabel
         return
     def makeTGraph(self,u,v,title,name,ex=None,ey=None):
+        '''
+        make TGraph with axes u,v. ex,ey are uncertainties in u,v if not None
+        '''
         if ex is None:
             g = TGraph(len(u),array('d',u), array('d',v))
         else:
@@ -647,6 +690,47 @@ class graphUtils():
         g.SetTitle(title)
         g.SetName(name)
         return g
+    def rebinByWeek(self,t,y,dt,dy,byDay=False):
+        '''
+        given timestamp, ordinate, timestamp uncertainty, ordinate uncertainty
+        return same averaged by week or by day if byDay==True.
+        uncertainty in timestamp is spread,
+        ordinate uncertainty is weighted average uncertainty
+        
+        datetime.date.isocalendar() is an instance-method returning a tuple
+        containing year, weeknumber and weekday in respective order for the given date instance.
+
+        timetuple is a time.struct_time object with attributes
+        tm_yday with range [1,366]
+        tm_year i.e. 2016
+        '''
+        ts,week,WeekNs = [],[],[]
+        for x in t:
+            dt = datetime.datetime.fromtimestamp(x)
+            ts.append( dt ) # convert to datetime stamp
+            if byDay:
+                w = dt.timetuple().tm_year*1000 + dt.timetuple().tm_yday
+            else:
+                w  = dt.isocalendar()[1] 
+            week.append( w )
+            if w not in WeekNs: WeekNs.append( w )
+                
+        T,Y,DT,DY = [],[],[],[]
+        WeekNs.sort()
+        for wknum in WeekNs:
+            u,v,dv = [],[],[]
+            for i,wk in enumerate(week):
+                if wk==wknum:
+                    u.append( t[i] )
+                    v.append( y[i] )
+                    dv.append( dy[i] )
+            T.append( sum(u)/float(len(u)) )
+            DT.append( 0.5*(max(u)-min(u)) )
+            wt = []
+            for x in dv: wt.append( 1./x/x )
+            Y.append( sum([ a*b for a,b in zip(v,wt)])/sum(wt) )
+            DY.append( 1./math.sqrt(sum(wt)))
+        return T,Y,DT,DY
     def color(self,obj,n,M,setMarkerColor=False,setMarkerType=True):
         '''
         set line color and marker type for obj based on indices n and M
