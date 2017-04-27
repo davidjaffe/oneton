@@ -17,12 +17,25 @@ import pipath
 
 
 class graphUtils():
-    def __init__(self):
-    # use in color()
-        self.goodColors = [1,2,3,4, 6,7,8,9] # no yellow(5) or white (0,10)
-        self.goodColors.extend( [11, 12, 18] )
-        self.goodColors.extend( [x for x in range(28,50)] )
-        self.goodMarkers = [x for x in range(20,31) ]
+    def __init__(self,defMarkerSize=1):
+        '''
+        initialize colors and markers in order preferred by Danielle Berish 20170226
+        set default marker size for graphs
+        '''
+        self.defaultMarkerSize = defMarkerSize
+        # use in color()
+        self.goodColors = [ROOT.kBlack, ROOT.kBlue, ROOT.kMagenta, ROOT.kGreen, ROOT.kOrange+7, ROOT.kCyan, ROOT.kViolet-1]
+        clist = [1,2,3,4, 6,7,8,9, 11,12, 18] # no yellow(5) or white (0,10)
+        clist.extend( [x for x in range(28,50)] )
+        for c in clist:
+            if c not in self.goodColors: self.goodColors.append( c )
+
+        self.goodMarkers = [29, 20, 21, 22, 23, 33, 34]
+        for m in range(20,31):
+            if m not in self.goodMarkers: self.goodMarkers.append( m )
+
+                
+                
         self.pip = pipath.pipath()
         return
     
@@ -187,7 +200,8 @@ class graphUtils():
             g.GetYaxis().SetRangeUser(yLimits[0],yLimits[1])
             g.GetYaxis().SetLimits(yLimits[0],yLimits[1])
 
-        self.finishDraw(canvas,ps,pdf)
+        title = os.path.basename(pdf).replace('.pdf','')
+        self.finishDraw(canvas,ps,pdf,ctitle=title)
         return
     def drawFit(self,h,figdir='',SetLogy=False,SetLogx=False,extraName=None):
         '''
@@ -238,17 +252,20 @@ class graphUtils():
         canvas.Modified()
         canvas.Update()
         ct = None
+        s = None
         if ctitle is not None:
             ct = ROOT.TText(0.5,0.975+0.013,ctitle) # 20170120 move title up a tiny bit
+            ct.SetNDC(True) # this is needed to ensure norm'ed coordinates
             ct.SetTextAlign(20) # horizontally centered
-            s = ct.GetTextSize()
-            ct.SetTextSize(s/2./2.) # 20170120 make title text smaller to avoid interference with individual hist titles
+            s = ct.GetTextSize()/4.
+            ct.SetTextSize(s) # 20170120 make title text smaller to avoid interference with individual hist titles
             ct.Draw()
         if ps is not None:
             canvas.Print(ps,'Landscape')
             os.system('ps2pdf ' + ps + ' ' + pdf)
             if os.path.exists(pdf): os.remove(ps)
 
+        #print 'graphUtils.finishDraw pdf',pdf,'ctitle',ctitle,'text size',s
         canvas.IsA().Destructor(canvas) # avoids seg fault?
         return
     def drawMultiHists(self,histlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,dopt='',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,forceNX=None,changeColors=False,addLegend=False):
@@ -670,7 +687,7 @@ class graphUtils():
             tmg.GetYaxis().SetTitle(yAxisLabel)
             if debug: print 'graphUtils.labelTMultiGraph:yAxisLabel',yAxisLabel
         return
-    def makeTGraph(self,u,v,title,name,ex=None,ey=None):
+    def makeTGraph(self,u,v,title,name,ex=None,ey=None,markerSize=None):
         '''
         make TGraph with axes u,v. ex,ey are uncertainties in u,v if not None
         '''
@@ -682,6 +699,9 @@ class graphUtils():
             g = TGraphErrors(len(u),array('d',u),array('d',v),array('d',ex),array('d',dy))
         g.SetTitle(title)
         g.SetName(name)
+        m = markerSize
+        if m is None: m = self.defaultMarkerSize
+        g.SetMarkerSize(m)
         return g
     def rebinByWeek(self,t,y,dt,dy,byDay=False):
         '''
