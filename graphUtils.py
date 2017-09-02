@@ -87,7 +87,23 @@ class graphUtils():
         else:
             print 'graphUtils.fixTimeDisplay: WARNING Null pointer passed to fixTimeDisplay?????'
         return
-
+    def normHist(self,Hin,divisor,makeNewHist=True,nameSuffix='N',titleSuffix=' per second'):
+        '''
+        return histogram scaled by 1/divisor
+        new histogram is returned, unless makeNewHist=False, then Hin is replaced
+        '''
+        cn = Hin.ClassName()
+        if 'TH1' in cn or 'TH2' in cn:
+            if makeNewHist:
+                title = Hin.GetTitle()
+                name  = Hin.GetName()
+                newname = (name + nameSuffix).replace(' ','_')
+                hnew = Hin.Clone(newname)
+                hnew.SetTitle(title + titleSuffix)
+            else:
+                hnew = Hin
+            hnew.Scale(1./divisor)
+        return hnew
     def makeTH2D(self,u,v,title,name,nx=40,xmi=1.,xma=-1.,ny=40,ymi=1.,yma=-1.):
         ''' book, fill 2d hist '''
         if xmi>xma :
@@ -240,6 +256,23 @@ class graphUtils():
         if os.path.exists(pdf): os.remove(ps)
 
         return
+    def makeCanvas(self,name='c1',StatSize=None):
+        '''
+        return standard canvas
+        StatSize controls size of text box
+        '''
+        c1 = ROOT.TCanvas(name)
+        ROOT.gStyle.SetOptStat(0)
+        ROOT.gStyle.SetOptFit(1111)
+        ROOT.gStyle.SetTitleX(0.8)
+        if StatSize is not None:
+            ROOT.gStyle.SetStatW(StatSize) # size of stats box (and text?)
+            ROOT.gStyle.SetStatH(StatSize)
+        c1.SetGrid(1)
+        c1.SetTicks(1)
+        return c1
+
+        
     def finishDraw(self,canvas,ps,pdf,setGrid=True,setTicks=True,ctitle=None):
         '''
         standard nonsense to finish drawing
