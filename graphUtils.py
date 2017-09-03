@@ -380,7 +380,8 @@ class graphUtils():
             if type(h) is list: # overlay
                 prefix = ''
                 
-                if addLegend: lg = self.createLegend(h)
+                if addLegend:
+                    lg = self.createLegend(h)
                 for icol,hh in enumerate(h):
                     if abscissaIsTime : self.fixTimeDisplay(hh)
                     if changeColors: hh.SetLineColor(self.goodColors[icol])
@@ -402,7 +403,8 @@ class graphUtils():
         return
     def drawMultiObjects(self,objlist,fname='',figdir='',statOpt=1111111,setLogy=False,setLogx=False,
                          dopt='',gopt='AP',abscissaIsTime=False,biggerLabels=True,fitOpt=None,Grid=False,
-                         forceNX=None,changeColors=False,addLegend=False,debug=False,noPopUp=True):
+                         forceNX=None,changeColors=False,addLegend=False,debug=False,noPopUp=True,
+                         legendColumns=None,legendX=None,legendY=None,legendDX=None,legendDY=None):
         '''
         draw multiple objects (histograms, multiple hists, graphs, multigraphs) on single pdf output file
         20161228 histlist can be a list of lists. hists in innermost list are overlaid.
@@ -491,7 +493,9 @@ class graphUtils():
                 prefix = ''
                 gopt1 = gopt
                 
-                if addLegend: lg = self.createLegend(h)
+                if addLegend:
+                    lg = self.createLegend(h,x1=legendX,y1=legendY,dy1=legendDY,dx1=legendDX)
+                    if legendColumns is not None: lg.SetNColumns(legendColumns)
                 for icol,hh in enumerate(h):
                     if abscissaIsTime : self.fixTimeDisplay(hh)
                     if changeColors: hh.SetLineColor(self.goodColors[icol])
@@ -672,14 +676,18 @@ class graphUtils():
         os.system('ps2pdf ' + ps + ' ' + pdf)
         if os.path.exists(pdf): os.remove(ps)
         return 
-    def createLegend(self,objlist,x1=0.5,y1=0.8,popt="L"):
+    def createLegend(self,objlist,x1=None,y1=None,dx1=None,dy1=None, popt="L"):
         
         '''
         return TLegend object from input list of objects
         x1,y1 = 0.5,0.9 places legend in upper left corner of pad
         '''
-        x2 = x1 + .5
-        y2 = y1 + .1
+        if x1 is None: x1 = 0.5
+        if y1 is None: y1 = 0.8
+        if dy1 is None: dy1 = 0.1
+        if dx1 is None: dx1 = 0.5
+        x2 = x1 + dx1
+        y2 = y1 + dy1
         lg = TLegend(x1,y1,x2,y2)
         for obj in objlist:
             t = obj.GetTitle()
