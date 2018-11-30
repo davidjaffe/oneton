@@ -15,6 +15,7 @@ import cerenkov
 import numpy
 import copy
 import ParticleProperties
+import matplotlib.pyplot as plt
 
 class oneton():
     def __init__(self):
@@ -990,14 +991,102 @@ class oneton():
         self.defineDetector(detName=det)
         self.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
         return
+    def stopStudy(self): # this might not work
+        '''
+        20181129
+        find variables sensitive to stopping position
+        use protons in lieu of muons since only proton range tables are available
+        '''
+        particle = 'proton'
+        material = 'water'
+        det = 'oneton'
+        self.defineDetector(detName=det)
+
+        nevent = 0
+        Results = []
+        for KE in [500., 700., 900., 1100., 1600., 2000., 3000.]: 
+            nevent += 1
+            tStart = [0., 0., 0.]
+            tDir = [0., 0., -1.]
+            processes = ['Cerenkov']
+            OPenergys,OPtracks = ton.oneEvent(particle, material, KE, tStart, tDir=tDir,processes=processes)
+            nG,sumr2 = 0,0.
+            for E,track in zip(OPenergys,OPtracks):
+                #print E,track
+
+                x,y,z = track[0][1]
+                r2 = x*x + y*y
+                nG += 1
+                sumr2 += r2
+            if nevent>0: 
+                tDir, track, totR, finalKE, samples = ton.savedEvents[nevent]
+            r2 = -1.
+            if nG>0: r2 = math.sqrt(sumr2/float(nG))
+            print 'KE',KE,'nG',nG,'sqrt(ave r^2)',r2,'totR',totR
+            Results.append( [KE,nG,r2,totR] )
+
+        print '\nsummary'
+        for V in Results:
+            KE,nG,r2,totR = V
+            print 'KE',KE,'nG',nG,'sqrt(ave r^2)',r2,'totR',totR
+        return
+    def drawIt(self,x,y,xtitle,ytitle,title,figpdf=None):
+        '''
+        draw graph defined by x,y
+
+        '''
+        plt.clf()
+        plt.grid()
+        plt.title(title)
+        figpdf = 'FIG_'+title.replace(' ','_') + '.pdf'
+
+        X = numpy.array(x)
+        Y = numpy.array(y)
+        plt.plot(X,Y,'o-')
+        plt.xlabel(xtitle)
+        plt.ylabel(ytitle)
+
+        if figpdf is not None:
+            plt.savefig(figpdf)
+            print 'lsqa.drawPulse Wrote',figpdf
+        else:
+            plt.show()
+        return
+    def knucklehead(self):
+        s = 'KE 500.0 nG 1247 sqrt(ave r^2) 291.500935832 totR 116.92225131 KE 700.0 nG 19641 sqrt(ave r^2) 462.519019112 totR 194.957 KE 900.0 nG 53614 sqrt(ave r^2) 480.599378689 totR 280.556 KE 1100.0 nG 98299 sqrt(ave r^2) 484.620609648 totR 370.78686413 KE 1600.0 nG 237904 sqrt(ave r^2) 483.939953647 totR 607.3691 KE 2000.0 nG 364683 sqrt(ave r^2) 477.046970485 totR 803.39689284 KE 3000.0 nG 712621 sqrt(ave r^2) 432.880466741 totR 1250.0'
+        KE,nG,RMS,totR = [],[],[],[]
+        words = s.split()
+        for i,word in enumerate(words):
+            if word=='KE': KE.append(float(words[i+1]))
+            if word=='nG': nG.append(float(words[i+1]))
+            if 'sqrt' in word: RMS.append(float(words[i+2]))
+            if word=='totR': totR.append(float(words[i+1]))
+
+        title = 'nG_v_r'
+        self.drawIt(totR,nG,'total range(cm)','number of photons',title,figpdf='FIG_'+title+'.pdf')
+        title = 'nG_v_RMS'
+        self.drawIt(totR,RMS,'total range(cm)','RMS(photon r^2)',title,figpdf='FIG_'+title+'.pdf')
+        return
+        
 if __name__ == '__main__' :
+    stopStudy = False
     if len(sys.argv)>1:
         if 'help' in sys.argv[1].lower():
             print 'oneton.py nCerenkov nScint nEvents Save(All,Hits) ioption oneton/dayabay/sr90-acrylic'
             sys.exit()
-
+        elif 'stopStudy' in sys.argv[1]:
+            stopStudy = True
+            
     ton = oneton()
-    ton.control()
+    ton.knucklehead()
+    sys.exit('knucklehead over')
+
+    
+    if not stopStudy:
+        ton.control()
+    else:
+        ton.stopStudy()
+
     print ''
     #ton.standardRun(nE,nC,nS,Save=Save,mode=mode,ioption=ioption)
 
