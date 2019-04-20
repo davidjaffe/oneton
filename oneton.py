@@ -15,6 +15,7 @@ import cerenkov
 import numpy
 import copy
 import ParticleProperties
+import matplotlib
 import matplotlib.pyplot as plt
 
 class oneton():
@@ -1038,19 +1039,22 @@ class oneton():
         plt.clf()
         plt.grid()
         plt.title(title)
-        figpdf = 'FIG_'+title.replace(' ','_') + '.pdf'
+        
 
-        X = numpy.array(x)
-        Y = numpy.array(y)
+        X = x #numpy.array(x)
+        Y = y # numpy.array(y)
         plt.plot(X,Y,'o-')
         plt.xlabel(xtitle)
+        if 'time' in xtitle.lower(): plt.gcf().autofmt_xdate()
         plt.ylabel(ytitle)
 
         if figpdf is not None:
+#            figpdf = 'FIG_'+title.replace(' ','_') + '.pdf'
             plt.savefig(figpdf)
-            print 'lsqa.drawPulse Wrote',figpdf
+            print 'oneton.drawPulse Wrote',figpdf
         else:
             plt.show()
+
         return
     def knucklehead(self):
         s = 'KE 500.0 nG 1247 sqrt(ave r^2) 291.500935832 totR 116.92225131 KE 700.0 nG 19641 sqrt(ave r^2) 462.519019112 totR 194.957 KE 900.0 nG 53614 sqrt(ave r^2) 480.599378689 totR 280.556 KE 1100.0 nG 98299 sqrt(ave r^2) 484.620609648 totR 370.78686413 KE 1600.0 nG 237904 sqrt(ave r^2) 483.939953647 totR 607.3691 KE 2000.0 nG 364683 sqrt(ave r^2) 477.046970485 totR 803.39689284 KE 3000.0 nG 712621 sqrt(ave r^2) 432.880466741 totR 1250.0'
@@ -1067,6 +1071,186 @@ class oneton():
         title = 'nG_v_RMS'
         self.drawIt(totR,RMS,'total range(cm)','RMS(photon r^2)',title,figpdf='FIG_'+title+'.pdf')
         return
+    def enviroRead(self,debug=0):
+        ''' read 1T environmental data downloaded from bnl-if docdb302 20190419
+        '''
+        fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Data/1T_environment_SHEET_1T_environmental_monitor.csv'
+        f = open(fn,'r')
+        myOrder = ['Datetime','Resistivity','pressure','S0 rate','S1 rate']
+        hdrMap = dict((k,'') for k in myOrder)
+        hdrDefaults = {'Resistivity':0.}
+        hdrCol = {}
+        colHdr = {}
+        envData = {}
+        for h in hdrMap.keys():
+            envData[h] = []
+            hdrCol[h] = None
+        hdr = None
+        for line in f:
+            if hdr is None:
+                hdr = line
+                for i,w in enumerate(hdr.split(',')):
+                    for h in hdrMap.keys():
+                        if h.lower() in w.lower():
+                            hdrMap[h] = w
+                            hdrCol[h] = i
+                            colHdr[i] = h
+                            break
+                if debug>1: print 'oneton.enviroRead hdrCol',hdrCol,'hdrMap.keys()',hdrMap.keys()
+            else:
+                s = line.split(',')
+                # avoid lines that are empty. (last entry in list is \n, so avoid it)
+                if any(s[:-1]):
+                    local = dict((k,None) for k in myOrder)
+                    # must have entries in all columns
+                    badcol = False
+                    for i,h in enumerate(myOrder):
+                        if i==hdrCol['Datetime']:
+                            try: 
+                                d = datetime.datetime.strptime(s[i],'%m/%d/%Y %H:%M')
+                            except:
+                                d = None
+                        else:
+                            try:
+                                d = float(s[i])
+                            except:
+                                if colHdr[i] in hdrDefaults:
+                                    d = hdrDefaults[colHdr[i]]
+                                else:
+                                    d = None
+                                if d is None:
+                                    if not badcol: print 'oneton.enviroRead fail hdr',colHdr[i],'s[i]',s[i],'line[:-1]',line[:-1]
+                                    badcol = True
+                        local[h] = d
+                    if None in local.values():
+                        if debug>0: print 'oneton.enviroRead Invalid column(s) in line',line[:-1]
+                    else:
+                        for h in local:
+                            envData[h].append(local[h])
+                
+        f.close()
+        if debug>0: print hdrMap
+        print 'oneton.enviroRead Number of good rows is',len(envData['Datetime'])
+        return hdrMap,envData 
+    def enviro(self,debug=0,show=True):
+        '''
+        read 1T so-called enviromental data and plot it
+        '''
+        hdrMap,envData = self.enviroRead(debug=-1)
+
+        marks = ['o','s','+','.','X']
+        points = {}
+        for i,h in enumerate(hdrMap.keys()):
+            points[h] = marks[i] + '-'
+
+        if debug>1: 
+            for k in hdrMap.keys(): print k,envData[k][:5]
+        
+        fdir = 'EnviroFigures/'
+
+
+
+        # S0,S1 vs time
+        for ctr in ['S0 rate','S1 rate']:
+            x = envData['Datetime'] 
+            xtitle = 'Datetime'
+            y = envData[ctr]
+            ytitle = hdrMap[ctr]
+            title = ctr + ' vs time'
+            figpdf = fdir + title.replace(' ','_') + '.pdf'
+            if show : figpdf = None
+            self.drawIt(x,y,xtitle,ytitle,title,figpdf=figpdf)
+            if figpdf : print 'oneton.enviro Wrote',figpdf
+
+        # (S0/S1 - average(S0/S1))/uncertainty vs time
+        s0 = envData['S0 rate']
+        s1 = envData['S1 rate']
+        R = [a/b for a,b in zip(s0,s1)]
+        dR= [a/b*math.sqrt(1./a/10.+1./b/10.) for a,b in zip(s0,s1)]
+        aveR = sum(R)/len(R)
+        dev=[(a-aveR)/b for a,b in zip(R,dR)]
+        ytitle = '(S0/S1 - average)/uncertainty'
+        title = ytitle + ' vs time'
+        figpdf = fdir + 'S0overS1_residual.pdf'
+        if show : figpdf = None
+        self.drawIt(x,dev,xtitle,ytitle,title,figpdf=figpdf)
+        if figpdf : print 'oneton.enviro Wrote',figpdf
+
+        # times series of S0,S1,S0/S1,Resistivity
+        fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        x = envData['Datetime'] 
+        xtitle = 'Datetime'
+        for h in hdrMap.keys():
+            if not (h=='Datetime' or h=='pressure'):
+                y = envData[h]
+                LABEL = hdrMap[h]
+                if h=='Resistivity':
+                    f = 50.
+                    y = [f*a for a in envData[h]]
+                    LABEL = str(f) + '*' + hdrMap[h]
+                ax.plot(x,y,points[h]+'-',label=LABEL)
+        #print 'x',x[:3],'R',R[:3],'dR',dR[:3]
+        f = 1000.
+        ax.errorbar(x,[f*a for a in R],fmt=points['pressure'],label=str(f)+'*S0/S1',yerr=[f*a for a in dR])
+        ax.legend(loc='best')
+        plt.gcf().autofmt_xdate()
+        plt.grid()
+        figpdf = fdir + 'rates_vs_time.pdf'
+        if show : figpdf = None
+        if figpdf is None:
+            plt.show()
+        else:
+            plt.savefig(figpdf)
+            print 'oneton.enviro Wrote',figpdf
+
+        # S0 vs S1 for water, WbLS running
+        fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        for j,run in enumerate(['water','WbLS']):
+            x,y = [],[]
+            for i,R in enumerate(envData['Resistivity']):
+                if (run=='water')==(R>0.):
+                    x.append(envData['S0 rate'][i])
+                    y.append(envData['S1 rate'][i])
+            ax.plot(x,y,marks[j],label=run)
+            print 'run',run,'entries',len(x)
+        ax.legend(loc='best')
+        ax.set_xlabel(hdrMap['S0 rate'])
+        ax.set_ylabel(hdrMap['S1 rate'])
+        #ax.set_xlim([300.,1000.])
+        #ax.set_ylim([300.,800.])
+        plt.grid()
+        figpdf = fdir + 'S0_vs_S1_forWaterAndWbLS.pdf'
+        if show : figpdf = None
+        if figpdf is None:
+            plt.show()
+        else:
+            plt.savefig(figpdf)
+            print 'oneton.enviro Wrote',figpdf
+
+
+        # average of S0 and S1 vs Resistivity for water
+        fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        x,y = [],[]
+        for i,R in enumerate(envData['Resistivity']):
+            if (R>16.):
+                x.append(envData['Resistivity'][i])
+                y.append(0.5*(envData['S0 rate'][i] +envData['S1 rate'][i] )  )
+        ax.plot(x,y,marks[j],label=run)
+        ax.legend(loc='best')
+        ax.set_xlabel(hdrMap['Resistivity'])
+        ax.set_ylabel('Average of S0,S1 rates (Hz)')
+        #ax.set_xlim([300.,1000.])
+        #ax.set_ylim([300.,800.])
+        plt.grid()
+        figpdf = fdir + 'S0_S1_average_vs_WaterResistivity.pdf'
+        if show : figpdf = None
+        if figpdf is None:
+            plt.show()
+        else:
+            plt.savefig(figpdf)
+            print 'oneton.enviro Wrote',figpdf
+
+        return
         
 if __name__ == '__main__' :
     stopStudy = False
@@ -1078,6 +1262,9 @@ if __name__ == '__main__' :
             stopStudy = True
             
     ton = oneton()
+    ton.enviro(show=False)
+    sys.exit('enviro over')
+    
     ton.knucklehead()
     sys.exit('knucklehead over')
 
