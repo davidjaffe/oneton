@@ -1138,7 +1138,7 @@ class oneton():
         '''
         hdrMap,envData = self.enviroRead(debug=-1)
 
-        marks = ['o','s','+','.','X']
+        marks = ['o','s','<','>','^']
         points = {}
         for i,h in enumerate(hdrMap.keys()):
             points[h] = marks[i] + '-'
@@ -1205,14 +1205,19 @@ class oneton():
 
         # S0 vs S1 for water, WbLS running
         fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        S0,S1,dt = {},{},{}
         for j,run in enumerate(['water','WbLS']):
             x,y = [],[]
+            dt[run] = []
             for i,R in enumerate(envData['Resistivity']):
                 if (run=='water')==(R>0.):
                     x.append(envData['S0 rate'][i])
                     y.append(envData['S1 rate'][i])
+                    dt[run].append(envData['Datetime'][i])
             ax.plot(x,y,marks[j],label=run)
             print 'run',run,'entries',len(x)
+            S0[run] = x
+            S1[run] = y
         ax.legend(loc='best')
         ax.set_xlabel(hdrMap['S0 rate'])
         ax.set_ylabel(hdrMap['S1 rate'])
@@ -1227,6 +1232,44 @@ class oneton():
             plt.savefig(figpdf)
             print 'oneton.enviro Wrote',figpdf
 
+        #S0/ave(S0) vs S1/ave(S1) for water,WbLS
+        fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        for j,run in enumerate(['water','WbLS']):
+            x = numpy.divide(S0[run],(sum(S0[run])/float(len(S0[run]))))
+            y = numpy.divide(S1[run],(sum(S1[run])/float(len(S1[run]))))
+            ax.plot(x,y,marks[j],label=run)
+        ax.legend(loc='best')
+        ax.set_xlabel('S0 rate/average(S0 rate)')
+        ax.set_ylabel('S1 rate/average(S1 rate)')
+        plt.grid()
+        figpdf = fdir + 'S0_vs_S1_normedToAverage_forWaterAndWbLS.pdf'
+        if show: figpdf = None
+        if figpdf:
+            plt.savefig(figpdf)
+            print 'oneton.enviro Wrote',figpdf
+        else:
+            plt.show()
+            
+        #time series S0/ave(S0), S1/ave(S1) for water,WbLS
+        fig, ax = plt.subplots(figsize=(7*2, 4*2))
+        for j,run in enumerate(['water','WbLS']):
+            x = dt[run]
+            y = numpy.divide(S0[run],(sum(S0[run])/float(len(S0[run]))))
+            ax.plot(x,y,marks[j],label=run+' S0')
+            y = numpy.divide(S1[run],(sum(S1[run])/float(len(S1[run]))))
+            ax.plot(x,y,marks[j+2],label=run+' S1')
+        ax.legend(loc='best')
+        ax.set_ylabel('rate/average(rate)')
+        ax.set_xlabel('Date')
+        plt.grid()
+        figpdf = fdir + 'S0_S1_normedToAverage_vs_time_forWaterAndWbLS.pdf'
+        if show: figpdf = None
+        if figpdf:
+            plt.savefig(figpdf)
+            print 'oneton.enviro Wrote',figpdf
+        else:
+            plt.show()
+            
 
         # average of S0 and S1 vs Resistivity for water
         fig, ax = plt.subplots(figsize=(7*2, 4*2))
@@ -1239,8 +1282,6 @@ class oneton():
         ax.legend(loc='best')
         ax.set_xlabel(hdrMap['Resistivity'])
         ax.set_ylabel('Average of S0,S1 rates (Hz)')
-        #ax.set_xlim([300.,1000.])
-        #ax.set_ylim([300.,800.])
         plt.grid()
         figpdf = fdir + 'S0_S1_average_vs_WaterResistivity.pdf'
         if show : figpdf = None
