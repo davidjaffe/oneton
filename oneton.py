@@ -1031,7 +1031,7 @@ class oneton():
             KE,nG,r2,totR = V
             print 'KE',KE,'nG',nG,'sqrt(ave r^2)',r2,'totR',totR
         return
-    def drawIt(self,x,y,xtitle,ytitle,title,figpdf=None):
+    def drawIt(self,x,y,xtitle,ytitle,title,figpdf=None,ex=None,ey=None,fmt='o-'):
         '''
         draw graph defined by x,y
 
@@ -1043,7 +1043,14 @@ class oneton():
 
         X = x #numpy.array(x)
         Y = y # numpy.array(y)
-        plt.plot(X,Y,'o-')
+        if ex and ey is None:
+            plt.plot(X,Y,fmt)
+        elif ex is None:
+            plt.errorbar(x, y, fmt=fmt, yerr=ey)
+        elif ey is None:
+            plt.errorbar(x, y, fmt=fmt, xerr=ex)
+        else:
+            plt.errorbar(x, y, fmt=fmt, xerr=ex, yerr=ey)
         plt.xlabel(xtitle)
         if 'time' in xtitle.lower(): plt.gcf().autofmt_xdate()
         plt.ylabel(ytitle)
@@ -1071,14 +1078,26 @@ class oneton():
         title = 'nG_v_RMS'
         self.drawIt(totR,RMS,'total range(cm)','RMS(photon r^2)',title,figpdf='FIG_'+title+'.pdf')
         return
-    def enviroRead(self,debug=0):
+    def enviroRead(self,debug=0,mode='enviro'):
         ''' read 1T environmental data downloaded from bnl-if docdb302 20190419
+        20210827 read data downloaded 20210821 Copyof1T_environment-1T_environmental_monitor.csv
         '''
-        fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Data/1T_environment_SHEET_1T_environmental_monitor.csv'
+        if mode=='enviro':
+            myOrder = ['Datetime','Resistivity','pressure','S0 rate','S1 rate']
+            hdrDefaults = {'Resistivity':0.}
+            fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Data/1T_environment_SHEET_1T_environmental_monitor.csv'
+            fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Data/Copyof1T_environment-1T_environmental_monitor.csv'
+            lastRow = 605 # sheet format changes after this row
+        elif mode=='notes':
+            myOrder = ['date','run numbers','notes', 'S0']  # 'run numbers' can be a range run1-run2. 'S0' is actually the dataset name
+            hdrDefaults = {'S0':''}
+            fn = '/Users/djaffe/Documents/Neutrinos/LDRD2010/OneTonPrototypeIn2-224/Data/Copyof1T_environment-DataTaking_notes.csv'
+            lastRow = 203
+        else:
+            sys.exit('oneton.enviroRead ERROR Invalid mode '+mode)
         f = open(fn,'r')
-        myOrder = ['Datetime','Resistivity','pressure','S0 rate','S1 rate']
+        print 'oneton.enviroRead Opened',fn
         hdrMap = dict((k,'') for k in myOrder)
-        hdrDefaults = {'Resistivity':0.}
         hdrCol = {}
         colHdr = {}
         envData = {}
@@ -1086,7 +1105,13 @@ class oneton():
             envData[h] = []
             hdrCol[h] = None
         hdr = None
+        lineNumber = 0
+        invalidColumns = {}
         for line in f:
+            if lineNumber>lastRow : break  # format of sheet changes after this row
+            lineNumber += 1
+            if mode=='notes' :  line = self.removeCommas(line)  # is this the problem?
+            if debug > 0 : print 'oneton.enviroRead line#',lineNumber,'line[:-1]',line[:-1]
             if hdr is None:
                 hdr = line
                 for i,w in enumerate(hdr.split(',')):
@@ -1102,40 +1127,112 @@ class oneton():
                 # avoid lines that are empty. (last entry in list is \n, so avoid it)
                 if any(s[:-1]):
                     local = dict((k,None) for k in myOrder)
-                    # must have entries in all columns
+                    # must have entries in all columns for mode='enviro'
                     badcol = False
                     for i,h in enumerate(myOrder):
-                        if i==hdrCol['Datetime']:
+#                        if i==hdrCol['Datetime']:
+                        if i==hdrCol[myOrder[0]]:
                             try: 
                                 d = datetime.datetime.strptime(s[i],'%m/%d/%Y %H:%M')
                             except:
-                                d = None
-                        else:
-                            try:
-                                d = float(s[i])
-                            except:
-                                if colHdr[i] in hdrDefaults:
-                                    d = hdrDefaults[colHdr[i]]
-                                else:
+                                try:
+                                    d = datetime.datetime.strptime(s[i],'%m/%d/%Y')
+                                except: 
                                     d = None
-                                if d is None:
-                                    if not badcol: print 'oneton.enviroRead fail hdr',colHdr[i],'s[i]',s[i],'line[:-1]',line[:-1]
-                                    badcol = True
+                        else:
+                            if mode=='enviro':
+                                try:
+                                    d = float(s[i])
+                                except:
+                                    if colHdr[i] in hdrDefaults:
+                                        d = hdrDefaults[colHdr[i]]
+                                    else:
+                                        d = None
+                                    if d is None:
+                                        if not badcol: print 'oneton.enviroRead fail hdr',colHdr[i],'s[i]',s[i],'line[:-1]',line[:-1]
+                                        badcol = True
+                            elif mode=='notes':
+                                d = s[i]
                         local[h] = d
                     if None in local.values():
-                        if debug>0: print 'oneton.enviroRead Invalid column(s) in line',line[:-1]
+                        iNone = local.values().index(None)
+                        if iNone not in invalidColumns : invalidColumns[iNone] = 0
+                        invalidColumns[iNone] += 1
+                        if debug>0:
+                            print 'oneton.enviroRead Invalid column(s) at line#',lineNumber,'column',iNone,' local',local
                     else:
                         for h in local:
                             envData[h].append(local[h])
                 
         f.close()
         if debug>0: print hdrMap
-        print 'oneton.enviroRead Number of good rows is',len(envData['Datetime'])
-        return hdrMap,envData 
-    def enviro(self,debug=0,show=True):
+        print 'oneton.enviroRead Number of good rows is',len(envData[myOrder[0]])
+        for i in sorted(invalidColumns.keys()):
+            print 'oneton.enviroRead Invalid column#',i,'Number of occurances',invalidColumns[i]
+        return hdrMap,envData
+    def removeCommas(self,line):
+        '''
+        20210827 return line with commas between double quotes in line removed
+        '''
+        while line.count('"')>1 :
+            i1 = line.index('"')
+            i2 = i1 + 1 + line[i1+1:].index('"')
+            line = line[:i1] + line[i1:i2+1].replace(',','').replace('"','') + line[i2+1:]
+        return line
+    def assignDatasets(self,hdr,Data,debug=-1):
+        '''
+        20210827 
+        return datasets, dataord
+        where datasets[name] = [first date,last date] where first date, last date defines the data set range
+        and dataord is the keys in dataset with preferential ordering
+
+        given hdr, Data
+        '''
+        if 'date' not in hdr: sys.exit('oneton.assignDatasets Expected key `date` not in hdr')
+        if 'S0'   not in hdr: sys.exit('oneton.assignDatasets Expected key `S0` not in hdr')
+        dates = Data['date']
+        setnames = Data['S0']
+        datasets = {}
+        for d,s in zip(dates,setnames):
+            if debug>0 : print 'oneton.assignDatasets d,s',d,s
+            if len(s)>0 and ('W0' in s or 'L0' in s):
+                if s not in datasets : datasets[s] = [d,d]
+                datasets[s][1] = d.replace(hour=23,minute=59,second=59) # this will be the upper limit of the range
+        print 'dataset range oneton.assignDatasets'
+        k = sorted(datasets.keys())
+        k = k[k.index('W00'):] + k[:k.index('W00')] # water data before wbls data
+        datord = k
+        for s in k : #sorted(datasets.keys()):
+            d1,d2 = datasets[s]
+            print s,d1,d2
+        return datasets,datord
+    def filter(self,t,y,datasets):
+        '''
+        return t,y that are in defined datasets time ranges
+        where t = datetime
+        and datasets[name] = [t1,t2] defines the inclusive time range for dataset name
+        20210827
+        '''
+        T,Y = [],[]
+        for a,b in zip(t,y):
+            ok = False
+            for name in datasets:
+                if datasets[name][0] <= a <= datasets[name][1] :
+                    ok = True
+                    break
+            if ok :
+                T.append(a)
+                Y.append(b)
+        return T,Y
+    def enviro(self,debug=0,show=True,Filter=True):
         '''
         read 1T so-called enviromental data and plot it
+        20210827 use new csv files that contain assignments of datasets for valid run ranges
         '''
+        notehdrMap, noteData = self.enviroRead(debug=-2,mode='notes')
+        datasets, dataord = self.assignDatasets(notehdrMap,noteData)
+
+        
         hdrMap,envData = self.enviroRead(debug=-1)
 
         marks = ['o','s','<','>','^']
@@ -1148,7 +1245,66 @@ class oneton():
         
         fdir = 'EnviroFigures/'
 
+        # averaged S0,S1 and S0/S1 vs time for each dataset
+        ctr0,ctr1 = ctrs =  ['S0 rate','S1 rate']
+        ctrR = 'S0S1 ratio'
+        longctrs = [x for x in ctrs]
+        longctrs.append(ctrR)
+        results = {}
+        tave,et = [],[]
+        nx,ny = 4,4
+        if nx*ny < len(datasets):
+            print 'oneton.enviro ERROR for plotting nx,ny,nx*ny',nx,ny,nx*ny,'< len(datasets)',len(datasets)
+            sys.exit('oneton.enviro ERROR for plotting nx*ny < len(datasets)')
+        fig = plt.figure(figsize=(10,10))
+        ifig = 0
+        for dsname in dataord:
+            t1,t2 = datasets[dsname] # start,end time
+            dt = (t2-t1)/2
+            meant = t1 + dt
+            tave.append(meant)
+            et.append(dt)
+            rates = {ctrR:[]}
+            for i,t in enumerate(envData['Datetime']):
+                if t1 <= t <= t2:
+                    for ctr in ctrs:
+                        if ctr not in rates: rates[ctr] = []
+                        rates[ctr].append( envData[ctr][i] )
+                    rates[ctrR].append( envData[ctr0][i]/envData[ctr1][i] )
 
+                    
+            if len(rates)==0:
+                print 'oneton.enviro NO MEASUREMENTS FOR DATASET',dsname #
+            else:
+                results[dsname] = []
+                for ctr in longctrs:
+                    x = rates[ctr]
+                    results[dsname].append( [ len(x), numpy.mean(x), numpy.std(x), numpy.var(x) ] )
+                ifig += 1
+                ax = plt.subplot(nx,ny,ifig)
+                for ctr in ctrs:
+                    nbins = 20
+                    plt.hist(rates[ctr],bins=nbins,range=(200.,1000.),label=ctr,alpha=0.5)
+                ax.set_xlim(200.,1000.)
+                if ifig==1 : plt.legend(loc='best')
+                plt.title(dsname)
+            if debug > 0 : print dsname,meant,results[dsname]
+        fig.tight_layout(rect=[0., 0.03,1.,0.97])
+        plt.show()
+        
+        for i,ctr in enumerate(longctrs):
+            x,y,ey,ex = [],[],[],et
+            x = tave
+            for dsname in dataord:
+                y.append(results[dsname][i][1])
+                ey.append(results[dsname][i][2])
+            ytitle = 'Average '+ctr
+            title  = ytitle + ' vs dataset time'
+            xtitle = 'Date'
+            figpdf = fdir + title.replace(' ','_') + '.pdf'
+            if show : figpdf = None
+            self.drawIt(x,y,xtitle,ytitle,title,figpdf=figpdf,ey=ey,ex=ex,fmt='o')
+                
 
         # S0,S1 vs time
         for ctr in ['S0 rate','S1 rate']:
@@ -1157,12 +1313,16 @@ class oneton():
             y = envData[ctr]
             ytitle = hdrMap[ctr]
             title = ctr + ' vs time'
+            if Filter :
+                title = 'Filtered ' + title
+                x,y = self.filter(x,y,datasets)
             figpdf = fdir + title.replace(' ','_') + '.pdf'
             if show : figpdf = None
             self.drawIt(x,y,xtitle,ytitle,title,figpdf=figpdf)
             if figpdf : print 'oneton.enviro Wrote',figpdf
 
         # (S0/S1 - average(S0/S1))/uncertainty vs time
+        x = envData['Datetime']
         s0 = envData['S0 rate']
         s1 = envData['S1 rate']
         R = [a/b for a,b in zip(s0,s1)]
@@ -1188,14 +1348,28 @@ class oneton():
                     f = 50.
                     y = [f*a for a in envData[h]]
                     LABEL = str(f) + '*' + hdrMap[h]
-                ax.plot(x,y,points[h]+'-',label=LABEL)
+                X,Y = x,y
+                if Filter : X,Y = self.filter(x,y,datasets)
+                ax.plot(X,Y,points[h]+'-',label=LABEL)
         #print 'x',x[:3],'R',R[:3],'dR',dR[:3]
         f = 1000.
-        ax.errorbar(x,[f*a for a in R],fmt=points['pressure'],label=str(f)+'*S0/S1',yerr=[f*a for a in dR])
+        X,Y,YERR = x,[f*a for a in R],[f*a for a in dR]
+        if Filter :
+            X,Y = self.filter(x,Y,datasets)
+            X,YERR = self.filter(x,YERR,datasets)
+        ax.errorbar(X,Y,fmt=points['pressure'],label=str(f)+'*S0/S1',yerr=YERR)
+
+        for name in dataord:
+            c = 'g'
+            if 'L' in name : c = 'y'
+            ax.axvspan(datasets[name][0],datasets[name][1], facecolor=c, alpha=0.5) # try to draw a vertical band
+        
         ax.legend(loc='best')
         plt.gcf().autofmt_xdate()
         plt.grid()
-        figpdf = fdir + 'rates_vs_time.pdf'
+        figpdf = 'rates_vs_time.pdf'
+        if Filter : figpdf = 'Filtered_'+figpdf
+        figpdf = fdir + figpdf
         if show : figpdf = None
         if figpdf is None:
             plt.show()
