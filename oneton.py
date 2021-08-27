@@ -1246,13 +1246,14 @@ class oneton():
         fdir = 'EnviroFigures/'
 
         # averaged S0,S1 and S0/S1 vs time for each dataset
+        # also plot histograms of S0, S1 rate for each dataset
         ctr0,ctr1 = ctrs =  ['S0 rate','S1 rate']
         ctrR = 'S0S1 ratio'
         longctrs = [x for x in ctrs]
         longctrs.append(ctrR)
         results = {}
         tave,et = [],[]
-        nx,ny = 4,4
+        nx,ny = 4,4       
         if nx*ny < len(datasets):
             print 'oneton.enviro ERROR for plotting nx,ny,nx*ny',nx,ny,nx*ny,'< len(datasets)',len(datasets)
             sys.exit('oneton.enviro ERROR for plotting nx*ny < len(datasets)')
