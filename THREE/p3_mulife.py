@@ -92,7 +92,15 @@ class p3_mulife():
             c1 = self.makeCanvas()
             c1.Draw()
             
-        histo.Fit(func,options)
+        fitResult = histo.Fit(func,options+'S')
+        if fitResult.Status()!=0:
+            stat1 = fitResult.Status()
+            fitResult = histo.Fit(func,options+'S')
+            stat2 = fitResult.Status()
+            if stat2!=0 :
+                fitResult = histo.Fit(func,options+'S')
+                stat3 = fitResult.Status()
+                if stat3!=0 : print('p3_mulife.fitHist fitResult status1',stat1,'status2',stat2,'status3',stat3,'fitResult.IsValid()',fitResult.IsValid(),'name',histo.GetName(),'words',words,fitResult)
         
         if makePDF :
             fname = self.Figures + histo.GetName() + '_' + words + '.pdf'
@@ -160,12 +168,19 @@ class p3_mulife():
         xma = max(abs(min(A)),max(A))
         xma = xma + 5.
         xmi = -xma
-        #print('p3_mulife.fillDiagHists',words,'tauGen',tauGen,'min(tauFit),max(tauFit)',min(A),max(A),'hist xmi,xma',xmi,xma)
         diagHists = {}
         name  = 'fmg'
         title = 'Fitted - Generated lifetime (ns) '+words
         nx,xmi,xma = 100,xmi,xma
         diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
+
+        A =  [fitResults[hname][1][1] for hname in fitResults]
+        xma = max(A) + 50.
+        name  = 'efmg'
+        title = 'uncertainty(Fitted - Generated lifetime) (ns) '+words
+        nx,xmi,xma = 100,0.,xma
+        diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
+        
         name = 'fmgpull'
         title = 'Pull(fitted - generated lifetime) '+words
         nx,xmi,xma = 100,-10.,10.
@@ -175,14 +190,34 @@ class p3_mulife():
         nx,xmi,xma = 100,0.,1.
         diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
 
+        A = [fitResults[hname][2] for hname in fitResults]
+        xmi = min(A)
+        if xmi > 0. :
+            xmi = math.log10(xmi) - 1.
+        else:
+            xmi = -30.
+        xma = 0.
+        name = 'log10prob'
+        title = 'log10(Fit probability) '+words
+        nx,xmi,xma = 100,xmi,xma
+        diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
+        
+
         for hname in fitResults:
             tau,etau = fitResults[hname][1]
             prob     = fitResults[hname][2]
+            logprob = -30.+1.e-10
+            if prob>0: logprob = math.log10(prob)
             diagHists['fmg'].Fill(tau-tauGen)
+            diagHists['efmg'].Fill(etau)
             if etau>0: diagHists['fmgpull'].Fill((tau-tauGen)/etau)
             diagHists['prob'].Fill(prob)
-        
+            diagHists['log10prob'].Fill(logprob)
+
+        histStats = {}
         for name in diagHists:
+            histStats[name] = self.getStats(diagHists[name])            
+            
             c1 = self.makeCanvas('cfD')
             ROOT.gStyle.SetOptStat(111111)
             ROOT.gStyle.SetOptFit(0)
@@ -192,22 +227,125 @@ class p3_mulife():
             fname = self.Figures + name + words +'.pdf'
             c1.Print(fname)
             c1.IsA().Destructor(c1) # avoids seg fault?
-        return 
-    def main(self,Nhist=10):
+        return histStats
+    def getStats(self,hist):
+        '''
+        return histogram stats
+        '''
+        entries = hist.GetEntries()
+        mean    = hist.GetMean()
+        emean   = hist.GetMeanError()
+        return [entries, mean, emean]
+    def plotFitStats(self,fitStats):
+        '''
+        plot fit statistics vs generated tau as extracted from histograms
+
+        fitStats['OPT_tgXXXX'] = {'fmg' : [entries, mean, emean], 'efmg': [en,m,em] ...}
+        fmg = fitted - generated
+        efmg = uncertainty(fitted - generated)
+        fmgpull = pull(fitted - generated)
+        '''
+        method= {'QL':'LogLike', 'Q':'Chisq'}
+        qkeys = ['fmg', 'efmg', 'fmgpull']
+        qnames= ['fitted - generated tau (ns)','uncertainty in fitted tau (ns)','pull(fitted - generated tau)']
+        QvGen = {}
+        for m in method:
+            for q in qkeys:
+                key = q+'_'+method[m]
+                QvGen[key] = []
+        for key in sorted(fitStats):
+            ctauGen = key[-4:]
+            tauGen = float(ctauGen)
+            fitOpt = key.split('_')[0] # either 'Q' or 'QL'
+            fitMethod = method[fitOpt]
+            for qkey in qkeys:
+                entries,mean,emean = fitStats[key][qkey]
+                name = qkey+'_'+fitMethod
+                QvGen[name].append( (tauGen,mean,emean) )
+
+        graphs = {}
+        for qkey in qkeys: graphs[qkey] = []
+
+        colors = [ROOT.kBlack, ROOT.kBlue, ROOT.kMagenta, ROOT.kGreen, ROOT.kOrange+7, ROOT.kCyan, ROOT.kViolet-1]
+        markers= [29,          20,         21,            22,          23,             33,         34]
+        for iu,m in enumerate(method):
+            for qkey,qtitle in zip(qkeys,qnames):
+                name = qkey+'_'+method[m]
+                title = qtitle + ' ' + method[m]
+                A = sorted(QvGen[name])
+                u = [x[0]+5.*float(iu) for x in A] # displace points slightly
+                v = [x[1] for x in A]
+                ev= [x[2] for x in A]
+                graphs[qkey].append( self.makeTGraph(u,v,title,name,ev=ev) )
+        for qkey,qtitle in zip(qkeys,qnames):
+            tmg = self.makeTMultiGraph(qkey,tit='')
+            lg  = ROOT.TLegend(.25,.85,.75,.99) # x1,y1,x2,y2 of corners
+            for i,g in enumerate(graphs[qkey]):
+                g.SetMarkerColor(colors[i])
+                #g.SetLineColor(colors[i])
+                g.SetMarkerStyle(markers[i])
+                tmg.Add(g)
+                lg.AddEntry(g,g.GetTitle(),"LP")
+            canvas = ROOT.TCanvas(qkey)
+            canvas.SetGrid(1)
+            canvas.SetTicks(1)
+            #print('p3_mulife.plotFitStats tmg.GetListOfGraphs()',tmg.GetListOfGraphs())
+            tmg.Draw('ALP')
+            tmg.GetXaxis().SetTitle('generated tau (ns)') ## this has to be after tmgDraw????
+            tmg.GetYaxis().SetTitle(qtitle)
+            gmi,gma = tmg.GetYaxis().GetXmin(),tmg.GetYaxis().GetXmax()
+            dg = abs(gma-gmi)/5.
+            gma += dg
+            tmg.SetMaximum(gma) # increase maximum so that legend doesn't overlap points
+            lg.Draw()
+            canvas.Draw()
+            canvas.cd()
+            canvas.Modified() #needed?
+            canvas.Update()   #needed?
+            fname = self.Figures + qkey + '.pdf'
+            canvas.Print(fname)
+            canvas.IsA().Destructor(canvas) # needed?
+        return
+    def makeTGraph(self,u,v,title,name,eu=None,ev=None):
+        '''
+        make TGraph with axes u,v. eu,ev are uncertainties in u,v if not None
+        '''
+
+        dv = ev
+        if ev is None: dv = [0. for x in range(len(u))]
+        du = eu
+        if eu is None: du = [0. for x in range(len(u))]
+        g = ROOT.TGraphErrors(len(u),numpy.array(u),numpy.array(v),numpy.array(du),numpy.array(dv))
+        g.SetTitle(title)
+        g.SetName(name)
+        if False : print('p3_mulife.makeTGraph Create obj',g,'name',name,'title',title,'len(u)',len(u),'u',u,'v',v,'du',du,'dv',dv)
+        return g
+    def makeTMultiGraph(self,name,tit=None,debug=False):
+        title = tit
+        if tit is None:title = name.replace('_',' ')
+        tmg = ROOT.TMultiGraph()
+        tmg.SetName(name)
+        tmg.SetTitle(title)
+        if debug:
+            print('p3_mulife.makeTMultiGraph:name',name,'title',title,'object',tmg)
+        return tmg
+
+    def main(self,Nhist=10,Nevt=1000):
         '''
         main module
         '''
-        #ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # vague hope that this suppress TCanvas::Print messages
+        ROOT.gROOT.ProcessLine("gROOT->SetBatch()") # vague hope that this suppress TCanvas::Print messages
         
         func,nx,xlo,xhi = None,None,None,None
 
         GENERATE = False
-        
+
+        fitStats = {}
         for rfn in self.rfn:
             if 'generate' in rfn:
                 GENERATE = True
                 nx,xlo,xhi = 47,600.,2400.
-                Nevt = 1000
+                Nevt = Nevt
                 Nhist = Nhist
                 thres = 1./float(Nhist)
                 tauGen  = 2000.
@@ -219,7 +357,7 @@ class p3_mulife():
                 words = ''
                 OK = self.getHists(rfn,debug=True)
                 if not OK : sys.exit('p3_mulife.main ERROR getHists return False for file '+self.rfn)
-            bias = {}    
+
             for options in ['Q','QL']:
                 if GENERATE : words = options + '_tG' + str(int(tauGen)) # used to define output pdf
                 fitResults = {}
@@ -233,7 +371,12 @@ class p3_mulife():
                     self.initLife(func)
                     makePDF = numpy.random.random()<thres
                     fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=makePDF,words=words)
-
+                    if fitResults[hname][2]<1.e-10 :  # try refitting if prob(chi2)<.0001
+                        prob_before = fitResults[hname][2]
+                        fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=True,words=words+'x2')
+                        prob_after = fitResults[hname][2]
+                        print('p3_mulife.main',hname,'prob(fit1)',prob_before,'prob(fit2)',prob_after)
+                        
                         
                 #print(fitResults)
                 tau = numpy.array([fitResults[key][1][0] for key in fitResults])
@@ -242,25 +385,33 @@ class p3_mulife():
                 av = numpy.average(tau,weights=1/etau/etau)
                 eav= numpy.sqrt(1./numpy.sum(1./etau/etau))
                 print('fit options= {2}, weighted average {0:.2f}({1:.2f})'.format(av,eav,options))
-                self.fillDiagHists(fitResults,options,tauGen)
-
+                
+                fitStats[words] = self.fillDiagHists(fitResults,options,tauGen)
 
             
             self.Hists = {}
             if not GENERATE : self.rf.Close()
+
+        for key in sorted(fitStats):
+            if False : print('p3_mulife.main key',key,'fitStats[key]',fitStats[key])
+        self.plotFitStats(fitStats)
         return
 if __name__ == '__main__' :
-    #h2n = 'LED_WFD_At_vs_run_S0'
-
-
 
     inputRootFileNames = ['DECAY_DATA/mc_decay_photontime.root', 'DECAY_DATA/data_decay_photontime.root']
 
-    inputRootFileNames = ['generate tauGen 1900.','generate tauGen 2000.','generate tauGen 2100.']
-    Nhist = 10
-    if len(sys.argv)>1 : Nhist = int(sys.argv[1])
+    taus = [1800., 1900., 2000., 2100., 2200.]
+    inputRootFileNames = []
+    for tauGen in taus:
+        inputRootFileNames.append('generate tauGen '+str(tauGen))
+
     
+    Nhist = 10
+    Nevt  = 1000
+    if len(sys.argv)>1 : Nhist = int(sys.argv[1])
+    if len(sys.argv)>2 : Nevt  = int(sys.argv[2])
+        
     SC = p3_mulife(inputRFN=inputRootFileNames)
 
-    SC.main(Nhist=Nhist)
+    SC.main(Nhist=Nhist,Nevt=Nevt)
     
