@@ -17,10 +17,12 @@ import math
 import Logger
 
 class p3_mulife():
-    def __init__(self,inputRFN=['DECAY_DATA/mc_decay_photontime.root']):
+    def __init__(self,inputRFN=['DECAY_DATA/mc_decay_photontime.root'],useToffset=False):
         if inputRFN is None:
             sys.exit( 'p3_mulife.__init__ NO INPUT ROOT FILE LIST SPECIFIED')
         self.rfn = inputRFN
+
+        self.useToffset = useToffset
 
 
         now = datetime.datetime.now()
@@ -47,6 +49,7 @@ class p3_mulife():
 
         
         print('p3_mulife.__init__ ROOT file: input',', '.join(self.rfn))
+        print('p3_mulife.__init__ useToffset',useToffset)
 
         return
     def makeHists(self,func,nx=47,xlo=600.,xhi=2400.,Nhist=10,Nevt=1000,tau=2000.):
@@ -63,13 +66,17 @@ class p3_mulife():
             for i in range(Nevt):
                 t = func.GetRandom()
                 self.Hists[hname].Fill(t)
-        print('p3_mulife.makeHists Created',Nhist,'hists with',Nevt,'events each. tau(ns)=',tau)
+        print('p3_mulife.makeHists Created',Nhist,'hists with',Nevt,'events each, in range',xlo,'to',xhi,'ns, with tau(ns)=',tau)
         return
     def life(self,xlo=600.,xhi=2400.,name='life'):
         '''
         return TF1 object for lifetime fit
         '''
-        func = ROOT.TF1(name,'[0]*exp(-x/[1])',xlo,xhi,2)
+        func_form = '[0]*exp(-x/[1])'
+        if self.useToffset:
+            func_form = '[0]*exp(-(x-'+str(xlo)+')/[1])'
+        print('p3_mulife.life functional form for fit is',func_form)
+        func = ROOT.TF1(name,func_form,xlo,xhi,2)
         func.SetParName(0,'Const')
         func.SetParName(1,'Tau')
         self.initLife(func)
@@ -84,6 +91,8 @@ class p3_mulife():
     def fitHist(self,func,histo,options='',makePDF=False,words=''):
         '''
         try to fit contents of histo for muon lifetime
+
+        Try up to 3 times to get a good fit based on the fitResult.Status()
         '''
         xlo = histo.GetXaxis().GetXmin()
         xhi = histo.GetXaxis().GetXmax()
@@ -101,6 +110,18 @@ class p3_mulife():
                 fitResult = histo.Fit(func,options+'S')
                 stat3 = fitResult.Status()
                 if stat3!=0 : print('p3_mulife.fitHist fitResult status1',stat1,'status2',stat2,'status3',stat3,'fitResult.IsValid()',fitResult.IsValid(),'name',histo.GetName(),'words',words,fitResult)
+        showFitResult = False
+        if showFitResult : 
+            print('p3_mulife.fitResult Correlation matrix and fit results follow')
+            cormatrix = numpy.matrix([ [0.,0.], [0.,0.] ])
+            covmatrix = numpy.matrix([ [0.,0.], [0.,0.] ])
+            for i in range(2):
+                for j in range(2):
+                    cormatrix[i,j] = fitResult.Correlation(i,j)
+                    covmatrix[i,j] = fitResult.CovMatrix(i,j)
+
+            print('Correlation matrix',cormatrix,'\nCovariance matrix',covmatrix)
+            print(fitResult)
         
         if makePDF :
             fname = self.Figures + histo.GetName() + '_' + words + '.pdf'
@@ -330,7 +351,7 @@ class p3_mulife():
             print('p3_mulife.makeTMultiGraph:name',name,'title',title,'object',tmg)
         return tmg
 
-    def main(self,Nhist=10,Nevt=1000):
+    def main(self,Nexpt=10,Nevt=1000):
         '''
         main module
         '''
@@ -346,7 +367,7 @@ class p3_mulife():
                 GENERATE = True
                 nx,xlo,xhi = 47,600.,2400.
                 Nevt = Nevt
-                Nhist = Nhist
+                Nhist = Nexpt
                 thres = 1./float(Nhist)
                 tauGen  = 2000.
                 if 'tauGen' in rfn: tauGen = float(rfn.split()[2])
@@ -368,7 +389,8 @@ class p3_mulife():
                         xhi=histo.GetXaxis().GetXmax()
                         nx =histo.GetNbins()
                         func = self.life(xlo=xlo,xhi=xhi)
-                    self.initLife(func)
+                    y1 = histo.GetBinContent(1) ##### Add initialization of parameter A based on 1st bin in histogram
+                    self.initLife(func,A=y1)
                     makePDF = numpy.random.random()<thres
                     fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=makePDF,words=words)
                     if fitResults[hname][2]<1.e-10 :  # try refitting if prob(chi2)<.0001
@@ -406,12 +428,18 @@ if __name__ == '__main__' :
         inputRootFileNames.append('generate tauGen '+str(tauGen))
 
     
-    Nhist = 10
+    Nexpt = 10
     Nevt  = 1000
-    if len(sys.argv)>1 : Nhist = int(sys.argv[1])
+    useToffset = False
+    if len(sys.argv)>1 :
+        if 'help' in sys.argv[1].lower():
+            print('USAGE: python p3_mulife.py Nexpt Nevt useToffset','\nDEFAULT: python p3_mulife.py',Nexpt,Nevt,useToffset)
+            sys.exit('HELP WAS PROVIDED')
+        Nexpt = int(sys.argv[1])
     if len(sys.argv)>2 : Nevt  = int(sys.argv[2])
+    if len(sys.argv)>3 : useToffset = ('true' in sys.argv[3].lower()) 
         
-    SC = p3_mulife(inputRFN=inputRootFileNames)
+    SC = p3_mulife(inputRFN=inputRootFileNames,useToffset=useToffset)
 
-    SC.main(Nhist=Nhist,Nevt=Nevt)
+    SC.main(Nexpt=Nexpt,Nevt=Nevt)
     
