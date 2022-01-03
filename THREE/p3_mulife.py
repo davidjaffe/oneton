@@ -193,9 +193,8 @@ class p3_mulife():
         '''
         
         tauGen = TAUGEN
-        if TAUGEN<0. :
-            fitInputHists = True
-            tauGen = 0.
+        fitInputHists = TAUGEN<0.
+        if TAUGEN<0. : tauGen = 0.
         
         words = options + '_tG' + str(int(tauGen)) # used to define output pdf
         if fitInputHists : words = options + '_fitInputHist'
