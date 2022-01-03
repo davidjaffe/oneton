@@ -46,10 +46,14 @@ class p3_mulife():
 
         
         self.Hists = {}
-
+        self.fitMethods = {'QL':'LogLike', 'Q':'Chisq', 'QI':'ChisqBin', 'QLI':'LogLikeBin', 'QP':'Pearson', 'QPI':'PearsonBin'}
+        self.fitMethods = {'QL':'LogLike', 'Q':'Chisq', 'QP':'Pearson'}
+        words = 'p3_mulife.__init__ fitMethods'
+        for key in self.fitMethods: words += ' ' + key + ':' + self.fitMethods[key]
         
         print('p3_mulife.__init__ ROOT file: input',', '.join(self.rfn))
         print('p3_mulife.__init__ useToffset',useToffset)
+        print(words)
 
         return
     def makeHists(self,func,nx=47,xlo=600.,xhi=2400.,Nhist=10,Nevt=1000,tau=2000.):
@@ -93,12 +97,15 @@ class p3_mulife():
         try to fit contents of histo for muon lifetime
 
         Try up to 3 times to get a good fit based on the fitResult.Status()
+
+        Option "S" = The result of the fit is returned in the TFitResultPtr 
         '''
         xlo = histo.GetXaxis().GetXmin()
         xhi = histo.GetXaxis().GetXmax()
 
         if makePDF :
-            c1 = self.makeCanvas()
+            showEntries = 'fitInput_' in words
+            c1 = self.makeCanvas(showEntries=showEntries)
             c1.Draw()
             
         fitResult = histo.Fit(func,options+'S')
@@ -158,13 +165,14 @@ class p3_mulife():
             obj = self.Hists[name]
             if debug: print(name,obj)
         return  AllTH1
-    def makeCanvas(self,name='c1',StatSize=None):
+    def makeCanvas(self,name='c1',StatSize=None,showEntries=False):
         '''
         return standard canvas
         StatSize controls size of text box
         '''
         c1 = ROOT.TCanvas(name)
         ROOT.gStyle.SetOptStat(0)
+        if showEntries : ROOT.gStyle.SetOptStat(10) 
         ROOT.gStyle.SetOptFit(1111)
         ROOT.gStyle.SetTitleX(0.8)
         if StatSize is not None:
@@ -176,22 +184,31 @@ class p3_mulife():
     def getHist(self,hn):
         hist = self.rf.Get(hn)
         return hist
-    def fillDiagHists(self,fitResults,options,tauGen):
+    def fillDiagHists(self,fitResults,options,TAUGEN):
         '''
         fill diagnostic hists
         using fitResults[hname] = [ (A,eA), (tau,etau), prob] 
-        tauGen = generated lifetime
+        TAUGEN = generated lifetime, if <0 then this is for fits of input histograms
         options = fit options
         '''
+        
+        tauGen = TAUGEN
+        if TAUGEN<0. :
+            fitInputHists = True
+            tauGen = 0.
+        
         words = options + '_tG' + str(int(tauGen)) # used to define output pdf
+        if fitInputHists : words = options + '_fitInputHist'
         
         A = [fitResults[hname][1][0]-tauGen for hname in fitResults]
         xma = max(abs(min(A)),max(A))
         xma = xma + 5.
         xmi = -xma
+        if fitInputHists : xmi = min(A)-5. 
         diagHists = {}
         name  = 'fmg'
         title = 'Fitted - Generated lifetime (ns) '+words
+        if fitInputHists : title = 'Fitted lifetime (ns) '+ words
         nx,xmi,xma = 100,xmi,xma
         diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
 
@@ -199,13 +216,17 @@ class p3_mulife():
         xma = max(A) + 50.
         name  = 'efmg'
         title = 'uncertainty(Fitted - Generated lifetime) (ns) '+words
+        if fitInputHists : title = 'uncertainty(Fitted lifetime) (ns) '+words
         nx,xmi,xma = 100,0.,xma
         diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
+
+        if not fitInputHists :
+            name = 'fmgpull'
+            title = 'Pull(fitted - generated lifetime) '+words
+            nx,xmi,xma = 100,-10.,10.
+            diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
+
         
-        name = 'fmgpull'
-        title = 'Pull(fitted - generated lifetime) '+words
-        nx,xmi,xma = 100,-10.,10.
-        diagHists[name] = ROOT.TH1D(name,title,nx,xmi,xma)
         name = 'prob'
         title = 'Fit probability '+words
         nx,xmi,xma = 100,0.,1.
@@ -231,7 +252,7 @@ class p3_mulife():
             if prob>0: logprob = math.log10(prob)
             diagHists['fmg'].Fill(tau-tauGen)
             diagHists['efmg'].Fill(etau)
-            if etau>0: diagHists['fmgpull'].Fill((tau-tauGen)/etau)
+            if etau>0 and not fitInputHists : diagHists['fmgpull'].Fill((tau-tauGen)/etau)
             diagHists['prob'].Fill(prob)
             diagHists['log10prob'].Fill(logprob)
 
@@ -266,9 +287,11 @@ class p3_mulife():
         efmg = uncertainty(fitted - generated)
         fmgpull = pull(fitted - generated)
         '''
-        method= {'QL':'LogLike', 'Q':'Chisq'}
+        method= self.fitMethods
         qkeys = ['fmg', 'efmg', 'fmgpull']
         qnames= ['fitted - generated tau (ns)','uncertainty in fitted tau (ns)','pull(fitted - generated tau)']
+
+            
         QvGen = {}
         for m in method:
             for q in qkeys:
@@ -294,7 +317,7 @@ class p3_mulife():
                 name = qkey+'_'+method[m]
                 title = qtitle + ' ' + method[m]
                 A = sorted(QvGen[name])
-                u = [x[0]+5.*float(iu) for x in A] # displace points slightly
+                u = [x[0]+2.*float(iu) for x in A] # displace points slightly
                 v = [x[1] for x in A]
                 ev= [x[2] for x in A]
                 graphs[qkey].append( self.makeTGraph(u,v,title,name,ev=ev) )
@@ -361,6 +384,8 @@ class p3_mulife():
 
         GENERATE = False
 
+        fitmeth = self.fitMethods.keys()
+        
         fitStats = {}
         for rfn in self.rfn:
             if 'generate' in rfn:
@@ -375,11 +400,15 @@ class p3_mulife():
                 self.makeHists(func,nx=nx,xlo=xlo,xhi=xhi,Nhist=Nhist,Nevt=Nevt,tau=tauGen)
             else:
                 GENERATE = False
-                words = ''
+                i1 = rfn.find('/')
+                i2 = rfn[i1:].find('_')+i1
+                words = 'fitInput_'+rfn[i1+1:i2]
+                thres = 2. # make a pdf file for all input hist fits
+                tauGen = -1. # for fitting input hists
                 OK = self.getHists(rfn,debug=True)
                 if not OK : sys.exit('p3_mulife.main ERROR getHists return False for file '+self.rfn)
 
-            for options in ['Q','QL']:
+            for options in self.fitMethods.keys():
                 if GENERATE : words = options + '_tG' + str(int(tauGen)) # used to define output pdf
                 fitResults = {}
                 for hname in self.Hists:
@@ -387,7 +416,6 @@ class p3_mulife():
                     if func is None :
                         xlo=histo.GetXaxis().GetXmin()
                         xhi=histo.GetXaxis().GetXmax()
-                        nx =histo.GetNbins()
                         func = self.life(xlo=xlo,xhi=xhi)
                     y1 = histo.GetBinContent(1) ##### Add initialization of parameter A based on 1st bin in histogram
                     self.initLife(func,A=y1)
@@ -415,29 +443,33 @@ class p3_mulife():
             if not GENERATE : self.rf.Close()
 
         for key in sorted(fitStats):
-            if False : print('p3_mulife.main key',key,'fitStats[key]',fitStats[key])
-        self.plotFitStats(fitStats)
+            if not GENERATE : print('p3_mulife.main key',key,'fitStats[key]',fitStats[key])
+        if GENERATE : self.plotFitStats(fitStats)
         return
 if __name__ == '__main__' :
 
-    inputRootFileNames = ['DECAY_DATA/mc_decay_photontime.root', 'DECAY_DATA/data_decay_photontime.root']
 
-    taus = [1800., 1900., 2000., 2100., 2200.]
-    inputRootFileNames = []
-    for tauGen in taus:
-        inputRootFileNames.append('generate tauGen '+str(tauGen))
-
-    
+    # process inputs
     Nexpt = 10
     Nevt  = 1000
     useToffset = False
     if len(sys.argv)>1 :
         if 'help' in sys.argv[1].lower():
-            print('USAGE: python p3_mulife.py Nexpt Nevt useToffset','\nDEFAULT: python p3_mulife.py',Nexpt,Nevt,useToffset)
+            print('USAGE: python p3_mulife.py Nexpt Nevt useToffset','\nDEFAULT: python p3_mulife.py',Nexpt,Nevt,useToffset,'\n BUT, if Nexpt<0, then use input histograms')
             sys.exit('HELP WAS PROVIDED')
         Nexpt = int(sys.argv[1])
     if len(sys.argv)>2 : Nevt  = int(sys.argv[2])
-    if len(sys.argv)>3 : useToffset = ('true' in sys.argv[3].lower()) 
+    if len(sys.argv)>3 : useToffset = ('true' in sys.argv[3].lower())
+
+    # use input to determine if events should be generated or input hists should be fitted
+    generateEvents = Nexpt>0
+    inputRootFileNames = ['DECAY_DATA/mc_decay_photontime.root', 'DECAY_DATA/data_decay_photontime.root']
+
+    if generateEvents :
+        taus = [1800., 1900., 2000., 2100., 2200., 2300., 2400.]
+        inputRootFileNames = []
+        for tauGen in taus:
+            inputRootFileNames.append('generate tauGen '+str(tauGen))
         
     SC = p3_mulife(inputRFN=inputRootFileNames,useToffset=useToffset)
 
