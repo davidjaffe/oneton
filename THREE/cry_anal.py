@@ -20,7 +20,6 @@ import Logger
 
 class cry_anal():
     def __init__(self):
-       #self.mpl_interface = mpl_interface.mpl_interface(internal=True)
        return
     def main(self):
         '''
@@ -67,7 +66,6 @@ class cry_anal():
         plt.savefig(pdf)
         print('cry_anal.main Saved figure to',pdf)
         plt.show()
-#        self.mpl_interface.histo(mom[13],xlo,xhi,dx=2.,title='Positive muons',xlabel='P(GeV)',grid=True)
         return
 if __name__ == '__main__' :
     ca = cry_anal()
