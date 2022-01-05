@@ -48,6 +48,8 @@ class p3_mulife():
         self.Hists = {}
         self.fitMethods = {'QL':'LogLike', 'Q':'Chisq', 'QI':'ChisqBin', 'QLI':'LogLikeBin', 'QP':'Pearson', 'QPI':'PearsonBin'}
         self.fitMethods = {'QL':'LogLike', 'Q':'Chisq', 'QP':'Pearson'}
+        # 20220103 place loose bounds on fitted lifetime (1,10000) ns. see initLife
+        self.fitMethods = {'QBL':'LogLike', 'QB':'Chisq'}
         words = 'p3_mulife.__init__ fitMethods'
         for key in self.fitMethods: words += ' ' + key + ':' + self.fitMethods[key]
         
@@ -66,6 +68,7 @@ class p3_mulife():
         for ih in range(Nhist):
             hname = 'rh'+f'{ih:05}'
             title = hname +'_tau_'+f'{tau:.2f}'
+            ROOT.gROOT.Delete(hname) ### to avoid 'potential memory leak' error?
             self.Hists[hname] = ROOT.TH1D(hname,title,nx,xlo,xhi)
             for i in range(Nevt):
                 t = func.GetRandom()
@@ -85,12 +88,15 @@ class p3_mulife():
         func.SetParName(1,'Tau')
         self.initLife(func)
         return func
-    def initLife(self,func,A=10.,tau=2000.):
+    def initLife(self,func,A=10.,tau=2000.,options=''):
         '''
         set initial parameter values for lifetime fit function
         '''
         func.SetParameter(0,A)
         func.SetParameter(1,tau)
+        if 'B' in options:
+            func.SetParLimits(1,1.,5.*tau)
+        
         return
     def fitHist(self,func,histo,options='',makePDF=False,words=''):
         '''
@@ -417,10 +423,10 @@ class p3_mulife():
                         xhi=histo.GetXaxis().GetXmax()
                         func = self.life(xlo=xlo,xhi=xhi)
                     y1 = histo.GetBinContent(1) ##### Add initialization of parameter A based on 1st bin in histogram
-                    self.initLife(func,A=y1)
+                    self.initLife(func,A=y1,options=options)
                     makePDF = numpy.random.random()<thres
                     fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=makePDF,words=words)
-                    if fitResults[hname][2]<1.e-10 :  # try refitting if prob(chi2)<.0001
+                    if fitResults[hname][2]<1.e-30 :  # try refitting if prob(chi2) is tiny
                         prob_before = fitResults[hname][2]
                         fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=True,words=words+'x2')
                         prob_after = fitResults[hname][2]
