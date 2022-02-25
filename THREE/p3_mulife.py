@@ -378,7 +378,44 @@ class p3_mulife():
         if debug:
             print('p3_mulife.makeTMultiGraph:name',name,'title',title,'object',tmg)
         return tmg
+    def printResults(self, resultsTable, fitType = 'QBL'):
+        '''
+        print latex compatible text for results
+        only used for input data and mc
 
+        input: resultsTable[key] =  (Tau,eTau)  where key = hname+fit_option or 'average'+fit_option
+
+        '''
+        print('\np3_mulife.printResults \n')
+
+        AND = ' & '
+        ENDCR = '\\\ '
+        
+        print('\\begin{table}[h]')
+        print('\\caption{Fitted lifetimes for stopped muon candidates in data and MC for each PMT as well as the weighted averages.}')
+        print('\\centering')
+        print('\\begin{tabular}{| c | c | c |} \\hline ')
+        print(' & \\multicolumn{2}{|c|}{Lifetime (ns)} ' + ENDCR)
+        print(' PMT & Data & MC \\\ \\hline ')
+        labels = ['S'+str(i) for i in range(8)]
+        labels.append( 'average' )
+        for label in labels:
+            row = label + AND
+            for h in ['data','MC']:
+                for key in resultsTable:
+                    if label in key and h in key and fitType in key :
+                        x,dx = resultsTable[key]
+                        row += '$ {:.1f} \\pm {:.1f} $'.format(x,dx)
+                        if h!='MC' : row += AND
+            row += ENDCR
+            if label=='average' : print('\\hline ')    
+            print(row)
+        print('\\hline \n','\\end{tabular}')
+        print('\\label{tab:fitted_life}')
+        print('\\end{table} \n')
+        
+        
+        return
     def main(self,Nexpt=10,Nevt=1000):
         '''
         main module
@@ -390,8 +427,10 @@ class p3_mulife():
         GENERATE = False
 
         fitmeth = self.fitMethods.keys()
+
+        resultsTable = {} # resultsTable[key] =  (Tau,eTau)  where key = hname+fit_option or 'average'+fit_option
         
-        fitStats = {}
+        fitStats = {} ## fitStats[hname] =  (Const,eConst),(Tau,eTau),fitProb
         for rfn in self.rfn:
             if 'generate' in rfn:
                 GENERATE = True
@@ -403,21 +442,27 @@ class p3_mulife():
                 if 'tauGen' in rfn: tauGen = float(rfn.split()[2])
                 func = self.life(xlo=xlo,xhi=xhi)
                 self.makeHists(func,nx=nx,xlo=xlo,xhi=xhi,Nhist=Nhist,Nevt=Nevt,tau=tauGen)
+                setOrdinateZero = False
             else:
                 GENERATE = False
                 i1 = rfn.find('/')
                 i2 = rfn[i1:].find('_')+i1
-                words = 'fitInput_'+rfn[i1+1:i2]
                 thres = 2. # make a pdf file for all input hist fits
                 tauGen = -1. # for fitting input hists
+                setOrdinateZero = True
                 OK = self.getHists(rfn,debug=True)
                 if not OK : sys.exit('p3_mulife.main ERROR getHists return False for file '+self.rfn)
 
             for options in self.fitMethods.keys():
-                if GENERATE : words = options + '_tG' + str(int(tauGen)) # used to define output pdf
-                fitResults = {}
+                if GENERATE :
+                    words = options + '_tG' + str(int(tauGen)) # used to define output pdf
+                else:
+                    words = 'fitInput_'+rfn[i1+1:i2] + '_' + options
+                    
+                fitResults = {}  ## fitResults[hname] =  (Const,eConst),(Tau,eTau),fitProb
                 for hname in self.Hists:
                     histo = self.Hists[hname]
+                    if setOrdinateZero : histo.SetMinimum(0.)
                     if func is None :
                         xlo=histo.GetXaxis().GetXmin()
                         xhi=histo.GetXaxis().GetXmax()
@@ -440,7 +485,15 @@ class p3_mulife():
                 av = numpy.average(tau,weights=1/etau/etau)
                 eav= numpy.sqrt(1./numpy.sum(1./etau/etau))
                 print('fit options= {2}, weighted average {0:.2f}({1:.2f})'.format(av,eav,options))
-                
+
+
+                if not GENERATE :
+                    dormc = '_MC'
+                    if any(['data' in x for x in fitResults.keys()]) :  dormc = '_data'
+                    resultsTable['average_' + options + dormc] = (av,eav)
+                    for key in fitResults: resultsTable[key + '_' + options] = fitResults[key][1]
+
+                    print('fill fitStats. words',words,'options',options)
                 fitStats[words] = self.fillDiagHists(fitResults,options,tauGen)
 
             
@@ -450,6 +503,10 @@ class p3_mulife():
         for key in sorted(fitStats):
             if not GENERATE : print('p3_mulife.main key',key,'fitStats[key]',fitStats[key])
         if GENERATE : self.plotFitStats(fitStats)
+
+        if not GENERATE :
+            print('p3_mulife.main resultsTable',resultsTable)
+            self.printResults(resultsTable)
         return
 if __name__ == '__main__' :
 
