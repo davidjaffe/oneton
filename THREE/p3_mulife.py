@@ -98,6 +98,24 @@ class p3_mulife():
             func.SetParLimits(1,1.,5.*tau)
         
         return
+    def printMultiHists(self,Hists,words):
+        '''
+        make a pdf file with all hists on one canvas
+        inputs : Hists = dict of histograms, words = name of output file
+        assumes there are 8 hists
+        '''
+        c1 = self.makeCanvas()
+        c1.SetCanvasSize(800,1150)
+        c1.Divide(2,4,0.004/4,0.002)
+        c1.Draw()
+        for i,h in enumerate(Hists):
+            c1.cd(i+1)
+            Hists[h].Draw()
+        fname = self.Figures + words + '.pdf'
+        c1.Print(fname)
+        c1.IsA().Destructor(c1) # avoids seg fault?
+        return
+    
     def fitHist(self,func,histo,options='',makePDF=False,words=''):
         '''
         try to fit contents of histo for muon lifetime
@@ -393,8 +411,10 @@ class p3_mulife():
         
         print('\\begin{table}[h]')
         print('\\caption{Fitted lifetimes for stopped muon candidates in data and MC for each PMT as well as the weighted averages.}')
+        print('\\def\\arraystretch{0.7}% reduce vertical spacing between lines')
         print('\\centering')
         print('\\begin{tabular}{| c | c | c |} \\hline ')
+        
         print(' & \\multicolumn{2}{|c|}{Lifetime (ns)} ' + ENDCR)
         print(' PMT & Data & MC \\\ \\hline ')
         labels = ['S'+str(i) for i in range(8)]
@@ -476,7 +496,8 @@ class p3_mulife():
                         fitResults[hname] = self.fitHist(func,histo,options=options,makePDF=True,words=words+'x2')
                         prob_after = fitResults[hname][2]
                         print('p3_mulife.main',hname,'prob(fit1)',prob_before,'prob(fit2)',prob_after)
-                        
+
+                self.printMultiHists(self.Hists,words)
                         
                 #print(fitResults)
                 tau = numpy.array([fitResults[key][1][0] for key in fitResults])
@@ -505,7 +526,7 @@ class p3_mulife():
         if GENERATE : self.plotFitStats(fitStats)
 
         if not GENERATE :
-            print('p3_mulife.main resultsTable',resultsTable)
+            #print('p3_mulife.main resultsTable',resultsTable)
             self.printResults(resultsTable)
         return
 if __name__ == '__main__' :
