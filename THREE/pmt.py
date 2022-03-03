@@ -74,12 +74,24 @@ class pmt():
                 x = numpy.array( x )
                 y = numpy.array( y )
                 y = y/numpy.sum(y)
-                plt.plot(x,y,label=pmt,linestyle=ls[i%2])
+                ymax = y.max()
+                imax = y.argmax()
+                xmax = x[imax]
+                il,ir = imax,imax
+                xl,xr = None,None
+                for i in range(len(x)):
+                    il = imax - i
+                    ir = imax + i
+                    if xl is None and y[il]<ymax/2. : xl = il
+                    if xr is None and y[ir]<ymax/2. : xr = ir
+                fwhm = xr-xl
+                cxmax = ' ({:.0f},{:.0f})'.format(xmax,fwhm)
+                plt.plot(x,y,label=pmt+cxmax,linestyle=ls[i%2])
         plt.grid()
         plt.legend(loc='best',ncol=1)
         plt.xlabel('Charge')
         plt.ylabel('Probability')
-        plt.title('Single photoelectron charge spectra')
+        plt.title('Single photoelectron charge spectra (max,fwhm)')
         pdf = self.Figures + 'simulated_spe_charge_spectra.pdf'
         plt.savefig(pdf)
         print('pmt.plotCharge Created',pdf)
