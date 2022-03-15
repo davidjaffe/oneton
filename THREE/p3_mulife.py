@@ -411,7 +411,7 @@ class p3_mulife():
         
         print('\\begin{table}[h]')
         print('\\caption{Fitted lifetimes for stopped muon candidates in data and MC for each PMT as well as the weighted averages.}')
-        print('\\def\\arraystretch{0.7}% reduce vertical spacing between lines')
+        print('\\def\\arraystretch{0.7}% reduce vertical spacing between lines') 
         print('\\centering')
         print('\\begin{tabular}{| c | c | c |} \\hline ')
         
