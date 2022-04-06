@@ -140,7 +140,7 @@ class calibf():
         inputs
         fNPE = one experiment's of events. each event is NPE with electronics response applied
         model = model to be used to generate 'MC' distribution. 
-        muMC = mean PE for 'MC' distribution, if None, use mean(fNPE)
+        muMC = input mean PE for 'MC' distribution, if None, use mean(fNPE)
         PLOT = produce plots showing scan of chi2 vs CF
         allSteps = if True, take fixed steps between limits, if False, use iterative procedure
         useLogLike = if False, use chisquare method, if True, use logLikelihood 
@@ -308,8 +308,12 @@ class calibf():
     def oneExpt(self,muData=0.63,muMC=0.5,Nevt=1000,PLOT=True,allSteps=False,useLogLike=False,debug=-1,comment='',model='DEFAULT'):
         '''
         generate, analyze and plot one experiment
-        return bfCF = best fit calibration factor
-        given input parameters
+
+        return bfCF, muGen, medianGen
+        bfCF = best fit calibration factor
+        muGen, medianGen = mean, median of MC generated NPE distribution without application of calibration factor 20220406
+
+        Given input parameters
         muData = mean of poisson distribution for fake Data
         muMC   = mean of poisson dist for 'MC'
         Nevt = events to generate for this experiment
@@ -329,7 +333,12 @@ class calibf():
 
         bfNPE, bfCF = self.fitExpt(fNPE, model=model, muMC=muMC, PLOT=PLOT, allSteps=allSteps, useLogLike=useLogLike,debug=debug,comment=comment)
         words = 'oneExpt_muData_{:}_muMC_{:}_Nevt_{:}'.format(int(1000*muData),int(1000*muMC),Nevt) + comment
-
+        
+        muGen,medianGen = -1.,-1. # mean,median of MC generated NPE distribution
+        if bfCF>0. :
+            mcNPE = bfNPE/bfCF
+            muGen = numpy.mean( mcNPE )
+            medianGen = numpy.median( mcNPE )
 
         if PLOT :
             ## two panels:
@@ -368,13 +377,19 @@ class calibf():
             print('calibf.oneExpt Wrote',pdf)
             plt.show()
                 
-        return bfCF
+        return bfCF, muGen, medianGen
     def plotExptData(self,exptData):
         '''
         plots results given dict exptData
-        exptData = {} # {iConfig : [ (Nexpt, Nevt, muData, trueCF), [bfCF0, bfCF1, ...] ] }
+        two additional lists were added to exptData on 20220406. Backward compatibility should be enforced...
+##OLD        exptData = {} # {iConfig : [ (Nexpt, Nevt, muData, trueCF), [bfCF0, bfCF1, ...] ] }
+        exptData = {} # {iConfig : [ (Nexpt, Nevt, muData, trueCF), [bfCF0, bfCF1, ...], [muGen0, muGen1, ... ], [mediaGen0, medianGen1,...] }
+
         iConfig is key that distinguishes between different configuations specified by parameters
-        (Nexpt, Nevt, muData, trueCF). [bfCF0, bfCF1, ..., bfCFi, ...] are the best-fit CF from experiments 0, 1, ..., i, ... 
+        (Nexpt, Nevt, muData, trueCF). 
+        [bfCF0, bfCF1, ..., bfCFi, ...] are the best-fit CF from experiments 0, 1, ..., i, ... 
+        [muGen0, muGen1, ..., muGeni, ..] is the mean of the MC generated experiments 0, 1, ..., i, ..
+        [medianGen0, medianGen1, ...]     idem for median
 
         '''
         
@@ -418,6 +433,7 @@ class calibf():
         
         xlimits = [1.e20,-1.e20]
         X,Ycf,eYcf,Ycfn,Ystd = {},{},{},{},{}
+        Ycf1,eYcf1 = {},{} ## cf1 = muData/muGen
         tCF0 = trueCFlist[0]
         for iCF,trueCF in enumerate(trueCFlist):
             X[trueCF] = []
@@ -425,11 +441,12 @@ class calibf():
             eYcf[trueCF] = []
             Ycfn[trueCF] = []
             Ystd[trueCF] = []
+            Ycf1[trueCF],eYcf1[trueCF] = [],[]
             for iConfig in exptData:
                 Nexpt, Nevt, muData, tCF = params = exptData[iConfig][0]
                 
                 if trueCF==tCF :
-                    CFs    = exptData[iConfig][1]
+                    CFs = exptData[iConfig][1]
                     CFs = numpy.array( CFs )
                     bias = CFs - tCF
                     xlimits[0] = min(xlimits[0],min(bias))
@@ -439,6 +456,13 @@ class calibf():
                     AX[iax][iCF].hist(bias,bins=bins)
                     AX[iax][iCF].set_title(label,fontsize=fontsize)
                     AX[iax][iCF].grid()
+                    if len(exptData[iConfig])>2 :
+                        muGens, medianGens = exptData[iConfig][2:]
+                        CF1s = muData/numpy.array( muGens )
+                        bias1 = CF1s - tCF
+                        m1,s1 = numpy.mean(CF1s), numpy.std(CF1s)
+                        Ycf1[trueCF].append( m1-trueCF )
+                        eYcf1[trueCF].append( s1/numpy.sqrt(Nexpt) )
                     
                     mean,std = numpy.mean(CFs), numpy.std(CFs)
                     X[trueCF].append( muData )
@@ -474,6 +498,7 @@ class calibf():
 
         for trueCF in trueCFlist:
             ax0.errorbar(X[trueCF],Ycf[trueCF],fmt='o-',yerr=eYcf[trueCF], label='trueCF {:.2f}'.format(trueCF))
+            if len(Ycf1[trueCF])>0 : ax0.errorbar(X[trueCF],Ycf1[trueCF],fmt='o:',yerr=eYcf1[trueCF],label=r'trueCF {:.2f} $\mu$'.format(trueCF))
             ax0.set_ylabel('CF bias')
 
             ax2.plot(X[trueCF],Ystd[trueCF],'o-',label='trueCF {:.2f}'.format(trueCF))
@@ -589,9 +614,10 @@ class calibf():
 
         showOne = False   ############# SHOW SINGLE EXPERIMENT RESULT (chi2 scan and NPE distributions)
         if showOne :
+            print('\ncalibf.main showOne Generate a single experiment, or a series of single experiments with different fit methods and/or input configurations')
             Nevt = 10000
             trueCF = 0.5
-            trueCF = 1.0
+            #trueCF = 1.0
             njob = 0
             for useLogLike in [False] : 
                 for allSteps in [False,True]:
@@ -599,12 +625,17 @@ class calibf():
                         comment = 'Njob_{:}'.format(njob)
                         njob += 1
                         print('calibf.main showOne Nevt,muData',Nevt,muData,'useLogLike',useLogLike)
-                        bfCF = self.oneExpt(muData=muData,muMC=muData/trueCF,Nevt=Nevt,PLOT=True,allSteps=allSteps,debug=1,useLogLike=useLogLike,comment=comment)
+                        bfCF, muGen, medianGen = self.oneExpt(muData=muData,muMC=muData/trueCF,Nevt=Nevt,PLOT=True,allSteps=allSteps,debug=1,useLogLike=useLogLike,comment=comment)
+                        CFmean, CFmedian = -1., -1.
+                        if muGen > 0. : CFmean = muData/muGen 
+                        if medianGen > 0. : CFmedian = muData/medianGen
+                        print('calibf.main ShowOne bfCF {:.3f} muGen {:.2f} medianGen {:.2f}'.format(bfCF, muGen, medianGen))
+                        print('calibf.main showOne trueCF {:.3f} CFmean {:.3f} CFmedian {:.3f}'.format(trueCF, CFmean, CFmedian) )
             sys.exit('calibf.main Completed showOne')
         
 
-        
-        exptData = {} # {iConfig : [ (Nexpt, Nevt, muData, trueCF), [bfCF0, bfCF1, ...] ] }
+        print('\ncalibf.main Generate and fit multiple experiments. Pickle results')
+        exptData = {} # {iConfig : [ (Nexpt, Nevt, muData, trueCF), [bfCF0, bfCF1, ...], [muGen0, muGen1, ... ], [mediaGen0, medianGen1,...] }
         
 
         iConfig = 0
@@ -615,19 +646,22 @@ class calibf():
         trueCFlist = [0.4, 1.7]
         muDataList = [0.5, 1.5, 5.0, 10., 15.]
         Expts      = [100, 100, 50,  20,  20]
-        Events     = [10000,10000, 10000, 10000, 10000]
+        nEvent  = 1000
+        Events     = [nEvent for x in range(len(Expts))] 
         for jExpt,muData in enumerate(muDataList):
             Nevt = Events[jExpt]
             Nexpt= Expts[jExpt]
             for trueCF in trueCFlist:
                 muMC = muData / trueCF
                 iConfig += 1
-                exptData[iConfig] =  [ (Nexpt, Nevt, muData, trueCF), [] ] 
+                exptData[iConfig] =  [ (Nexpt, Nevt, muData, trueCF), [],[],[] ] 
                 params = exptData[iConfig][0]
                 print('calibf.main iConfig',iConfig,'Nexpt {:} Nevt {:} muData {:.2f} trueCF {:.1f}'.format(*params))
                 for iExpt in range(Nexpt):
-                    bfCF = self.oneExpt(muData=muData, muMC=muMC, Nevt=Nevt, PLOT=False)
+                    bfCF, muGen, medianGen = self.oneExpt(muData=muData, muMC=muMC, Nevt=Nevt, PLOT=False)
                     exptData[iConfig][1].append( bfCF )
+                    exptData[iConfig][2].append( muGen )
+                    exptData[iConfig][3].append( medianGen )
                 CFs = exptData[iConfig][1]
                 CFs = numpy.array( CFs )
                 mean,std = numpy.mean(CFs), numpy.std(CFs)
