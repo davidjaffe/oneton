@@ -1,0 +1,7 @@
+%\caption{Number of time coincident event selected by different PMT groups}
+%
+   & MC   & DATA                   & MC   & DATA                   & MC   & DATA \\ 
+$A\cdot B$ & 2487 & 4176                   & 2627 & 800                    & 2319 & 796        \\ 
+$A\cdot \bar{B}$ & 5678 & 4498                   & 6290 & 4468           & 8411 & 5366      \\ 
+\$\bar{A}\cdot B$ & 6706 & 4960                   & 5087 & 5196                   & 4809 & 5507  
+   & \multicolumn{2}{c|}{EVEN-ODD} & \multicolumn{2}{c|}{RED-BLUE} & \multicolumn{2}{c|}{INNER-OUTER}  \\\hline
