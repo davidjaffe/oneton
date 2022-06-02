@@ -5,3 +5,12 @@ $A\cdot B$ & 2487 & 4176                   & 2627 & 800                    & 231
 $A\cdot \bar{B}$ & 5678 & 4498                   & 6290 & 4468           & 8411 & 5366      \\ 
 \$\bar{A}\cdot B$ & 6706 & 4960                   & 5087 & 5196                   & 4809 & 5507  
    & \multicolumn{2}{c|}{EVEN-ODD} & \multicolumn{2}{c|}{RED-BLUE} & \multicolumn{2}{c|}{INNER-OUTER}  \\\hline
+
+coinc['MC'] = { {'EVEN-ODD': [2487, 5678, 6706]},  # A.B, A.!B, !A.B
+	      		{'RED-BLUE':[2627,6290,5087]},
+			{'INNER-OUTER':[2319, 8411, 4809]}
+			}
+coinc['DATA'] = { { {'EVEN-ODD': [4176, 4498, 4960]},  # A.B, A.!B, !A.B
+	      		{'RED-BLUE':[800, 4468, 5196]},
+			{'INNER-OUTER':[796, 5366, 5507]}
+			}

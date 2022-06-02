@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 
 class evenodd():
     def __init__(self):
+        self.sources   = ['DATA','MC']
+        self.groupings = ['RED-BLUE','EVEN-ODD',  'INNER-OUTER']
  # A.B, A.!B, !A.B
         self.coinc = {}
         self.coinc['MC'] =  {'EVEN-ODD': [2487, 5678, 6706],  
@@ -23,6 +25,11 @@ class evenodd():
         self.coinc['DATA'] =  {'EVEN-ODD': [4176, 4498, 4960],
                     'RED-BLUE':[800, 4468, 5196],
                         'INNER-OUTER':[796, 5366, 5507] }
+
+        print('evenodd.__init__ Totals in each grouping')
+        for src in self.sources:
+            for group in self.groupings:
+                print(src,group,sum(self.coinc[src][group]))
 
         self.figDir = 'EVENODD_FIGURES/'
 			
@@ -52,8 +59,8 @@ class evenodd():
         return r,dr
     def plot(self,Fracs,dFracs):
         '''
-        first plot data and MC fractions for all groupings
-        second plot A*!B/A*B and !A*B/A*B
+        first plot data and MC fractions for all groupings as bar chart
+        second plot as pie chart
         '''
         xlab = []
         align = ['center','center']
@@ -91,32 +98,40 @@ class evenodd():
         print('evenodd.plot Wrote',pdf)
         plt.show()
 
-        x, dx, xstep = 0., 0., 1.
-        xlab = []
-        for i in range(3):
-            xlab.extend(  [ r'$A\cdot\bar{B}/A\cdot B$', r'$\bar{A}\cdot B$/A\cdot B$'] )
+        fig, ax = plt.subplots(nrows=2,ncols=3)
+        
         for I,src in enumerate(self.sources):
-            x = 0.
+            x = float(I)*dx
+            xticks = []
+            for J,group in enumerate(self.groupings):
+                f = Fracs[src][group]
+                df=dFracs[src][group]
+                ax[I,J].pie(f,labels= [ r'$A\cdot B$', r'$A\cdot\bar{B}$', r'$\bar{A}\cdot B$'],labeldistance=0.5)
+                ax[I,J].set_title(group)
+                if J==0: ax[I,J].set_ylabel(src)
+        pdf = self.figDir + 'fractions_pie.pdf'
+        plt.savefig(pdf)
+        print('evenodd.plot Wrote',pdf)
+        plt.show()
+        
 
         
         return
         
     def main(self):
-        self.sources = sources = ['DATA','MC']
-        self.groupings = ['RED-BLUE','EVEN-ODD',  'INNER-OUTER']
         Fracs,dFracs = {},{}
         Ratios,dRatios = {},{}
-        for src in sources:
+        for src in self.sources:
             Fracs[src],dFracs[src] = {},{}
             Ratios[src],dRatios[src] = {},{}
             for group in self.coinc[src]:
                 f,df = self.fraction(self.coinc[src][group])
                 Fracs[src][group],dFracs[src][group] = f,df
-                print('Fractions',src,group,[p for p in zip(f,df)])
+                #print('Fractions',src,group,[p for p in zip(f,df)])
 
                 r,dr = self.ratios(self.coinc[src][group])
                 Ratios[src][group],dRatios[src][group] = r,dr
-                print('Ratios',src,group,[p for p in zip(r,dr)])
+                #print('Ratios',src,group,[p for p in zip(r,dr)])
                     
         #print('Fracs',Fracs,'\ndFracs',dFracs)
         self.plot(Fracs,dFracs)
