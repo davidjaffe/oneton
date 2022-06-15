@@ -73,6 +73,26 @@ class twofold():
         '''
         return 'Data' for one generated experiment given input efficiencies and number of events
         '''
+        NN = self.Npmt*self.Npmt
+        eff = self.input[:self.Npmt]
+        epp = []
+        for i in range(self.Npmt):
+            for j in range(self.Npmt):
+                epp.append( eff[i]*eff[j]*self.prob[i,j] )
+        epp = numpy.array(epp)
+        X = numpy.zeros( NN )
+        Ones = numpy.ones( NN )
+        N   = self.input[self.Npmt]
+        for evt in numpy.arange(N):
+            R = numpy.random.random( NN )
+            X += (R<=epp)*Ones
+        X = numpy.fix( X )
+        X = X.reshape(self.Npmt,self.Npmt)
+        return X
+    def oneTrueExpt(self):
+        '''
+        return 'Data' for one generated experiment given input efficiencies and number of events
+        '''
         eff = self.input[:self.Npmt]
         N   = self.input[self.Npmt]
         X = numpy.zeros( self.Npmt*self.Npmt ).reshape( (self.Npmt,self.Npmt) )
@@ -115,21 +135,48 @@ class twofold():
         pout = res.get('x')
         hess_inv = res.get('direc') #???
         chi2 = self.chisqr(pout)
-        print('twofold.find {0} chi2 {1:.1f} with output params'.format(method,chi2))
+        fitpar = 'twofold.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
         if self.debug > 1:
             print('twofold.find res.keys()',res.keys())
             print('twofold.find hess_inv',hess_inv)
-        fitpar = 'twofold.find fitpar'
         for i,p in enumerate(pout):
             punc = 0.
             if hess_inv is not None: punc = math.sqrt(max(0.,hess_inv[i,i]))
             fitpar += ' {0:.3f}({1:.3f})'.format(p,punc)
-        fitpar += '\n'
-        print(method,fitpar)
+
+        print(fitpar)
+        return pout
+    def analyzeResults(self,fitresults):
+        '''
+        compare fitresults with input for toyMC
+        '''
+        print('\ntwofold.analyzeResults')
+        L = len(self.input)
+        means,stddevs = {},{}
+        for method in fitresults:
+            means[method],stddevs[method] = [],[]
+            results = numpy.array( fitresults[method] )
+            #print('method,results',method,results)
+            Mresult = method + ' means'
+            Sresult = method + 'stddev'
+            for i in range(L):
+                #if i==0: print('i,results[:,i]',i,results[:,i])
+                m,s = numpy.mean( results[:,i] ), numpy.std(results[:,i] )
+                means[method].append( m )
+                stddevs[method].append( s )
+                Mresult += ' {:.3f}'.format(m)
+                Sresult += ' {:.3f}'.format(s)
+            print(Mresult)
+            print(Sresult)
+        Winput = 'Input pararameters'
+        for i in range(L):
+            Winput += ' {:.3f}'.format(self.input[i])
+        print(Winput)
+
         return
     def main(self):
 
-        self.debug = 2
+        self.debug = -1
 
         ## these are minimization methods for scipy 1.8.1
         ## Unconstrained: CG, BFGS 
@@ -141,23 +188,29 @@ class twofold():
         methods.extend( boundconstrained_methods )
         
         toyMC = True
+        Nexpt = 1
         if toyMC:
+            Nexpt = 1000
             Nguess = 5000.
-            self.input = [1. for x in range(self.Npmt)]
             self.input = [1.2 - numpy.random.random()*0.4 for x in range(self.Npmt)]
             print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input))
             self.input.append( Nguess )
-
-        
             
-            self.inputData = self.oneExpt()
-        else:
-            self.inputData = self.TwoFold['DATA']
-            Nguess = self.maximum['DATA']
+        fitresults = {m:[] for m in methods}
+        for expt in range(Nexpt):
+            print('twofold.main expt',expt)
+            if toyMC:
+                self.inputData = self.oneExpt()
+            else:
 
-        print('twofold.main toyMC',toyMC)
-        for method in methods:
-            self.find(method=method,Nguess=Nguess)
+                self.inputData = self.TwoFold['DATA']
+                Nguess = self.maximum['DATA']
+
+            for method in methods:
+                fitpar = self.find(method=method,Nguess=Nguess)
+                fitresults[method].append( fitpar )
+            #print('fitresults',fitresults)
+        if toyMC : self.analyzeResults(fitresults)
         return
 if __name__ == '__main__' :
     P = twofold()
