@@ -8,16 +8,47 @@ import numpy
 
 import os
 
+import datetime
+import Logger
+import pickle
+
 import sys
 import math
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
 class twofold():
-    def __init__(self,debug=-1):
+    def __init__(self,debug=-1,nToy=0):
 
+### usual directory structure to preserve output(log,figures,pickle,...) of each job
+        now = datetime.datetime.now()
+        self.now = now.strftime('%Y%m%dT%H%M%S')
+
+        self.rootDir = 'JOBS_TWOFOLD/'
+        parentDir = self.rootDir+self.now
+        dirs = [parentDir]
+        self.Figures = parentDir  + '/FIGURES/'
+        self.logDir = parentDir
+        dirs.append( self.Figures)
+        dirs.append( self.logDir)
+
+        for d in dirs:
+            if not os.path.exists(d):
+                os.makedirs(d)
+                print('calibf.__init__ create directory',d)
+
+        lf = self.logDir + '/logfile.log'
+        sys.stdout = Logger.Logger(fn=lf)
+        print('twofold.__init__ Output directed to stdout and',lf)
+
+## process, report inputs
         self.debug = debug
+        self.nToy = nToy
+        self.toyMC = nToy > 0
+        print('twofold.__init__ debug',self.debug,'nToy',self.nToy,'toyMC',self.toyMC)
 
+
+## table of unique twofold coincidences from WbLS_0525_2022
         self.sources   = ['DATA','MC']
         self.TwoFold = {}
         self.TwoFold['MC'] = numpy.array( (0,101836, 62216, 37352, 7560, 10556, 105196, 89348, # S0 in coinc S0-S7
@@ -64,10 +95,46 @@ class twofold():
         self.prob = X/m
         if self.debug > 0 : print('twofold.__init__ prob',self.prob)
         print('twofold.__init__ maximum',maximum)
+
+### store analysis results
+### chi2All = sum_all [(best fit - input)/standard deviation]^2
+### chi2PMT = sum_PMT [(best fit - input)/standard deviation]^2
+### all includes number of input events
+
+        self.analysisResults = {} # [method: [chi2All, chi2PMT]]
         
 
-        self.figDir = 'TWOFOLD_FIGURES/'
+        self.figDir = self.Figures #'TWOFOLD_FIGURES/'
 			
+        return
+    def readPickle(self,timestamp):
+        '''
+        return input & fitresults given job specified by timestamp
+        '''
+        pickle_fn = self.rootDir + timestamp + '/' + timestamp + '.pickle'
+        
+        f = open(pickle_fn,'rb')
+        Input = pickle.load(f)
+        fitresults = pickle.load(f)
+        f.close()
+        print('twofold.readPickle Read',pickle_fn)
+        
+        return Input, fitresults
+    def writePickle(self,Input, fitresults):
+        '''
+        write inputData & fitresults to pickle file
+        order of dump must be matched in load according to https://stackoverflow.com/questions/20716812/saving-and-loading-multiple-objects-in-pickle-file
+        '''
+        timestamp = self.now
+        pickle_fn = self.rootDir + timestamp + '/' + timestamp + '.pickle'
+
+
+        f = open(pickle_fn, 'wb')
+        pickle.dump(Input, f)
+        pickle.dump(fitresults, f)
+        f.close()
+
+        print('twofold.writePickle Wrote',pickle_fn)
         return
     def oneExpt(self):
         '''
@@ -122,18 +189,30 @@ class twofold():
                 cs += num*num/C[i,j]
         return cs
     def find(self,method='Powell',Nguess = 5000.):
+        '''
+        return best fit parameters from fit
+        '''
+        
         param = [1. for x in range(self.nPMT)]
         bounds = [(None,None) for x in range(self.nPMT)]
         bounds.append( (self.maximum['DATA'], 2.*Nguess) )
         param.append(Nguess)
         chi2 = self.chisqr(param)
+        
         if self.debug > 0: 
             print('\ntwofold.find method',method)
             print('twofold.find chi2',chi2,'with input params',param)
-        res = minimize(self.chisqr, param, method=method,bounds=bounds)
+        ## after 20220616T165320 don't give bounds for unbounded methods
+        disp = self.debug > 1
+        if self.bounded[method]: 
+            res = minimize(self.chisqr, param, method=method,bounds=bounds)
+        else:
+            res = minimize(self.chisqr, param, method=method, options={'disp':disp})
+            
         if self.debug > 1 : print('twofold.find res',res)
         pout = res.get('x')
         hess_inv = res.get('direc') #???
+        success = res.get('success')
         chi2 = self.chisqr(pout)
         fitpar = 'twofold.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
         if self.debug > 1:
@@ -144,7 +223,8 @@ class twofold():
             if hess_inv is not None: punc = math.sqrt(max(0.,hess_inv[i,i]))
             fitpar += ' {0:.3f}({1:.3f})'.format(p,punc)
 
-        print(fitpar)
+        if not success : fitpar += ' FIT FAILED. ' + res.get('message')
+        if self.debug > 0 or not success: print(fitpar)
         return pout
     def analyzeResults(self,fitresults):
         '''
@@ -159,38 +239,107 @@ class twofold():
             #print('method,results',method,results)
             Mresult = method + ' means'
             Sresult = method + 'stddev'
+            chi2All, chi2PMT = 0., 0.
             for i in range(L):
                 #if i==0: print('i,results[:,i]',i,results[:,i])
                 m,s = numpy.mean( results[:,i] ), numpy.std(results[:,i] )
+                c = (m-self.input[i])/s
+                chi2All += c*c
+                if i<self.nPMT : chi2PMT += c*c
                 means[method].append( m )
                 stddevs[method].append( s )
                 Mresult += ' {:.3f}'.format(m)
                 Sresult += ' {:.3f}'.format(s)
             print(Mresult)
             print(Sresult)
+            print(method,'Chi2All {:.2f} Chi2PMT {:.2f}'.format(chi2All,chi2PMT))
+            self.analysisResults[method] = [chi2All, chi2PMT]
         Winput = 'Input pararameters'
         for i in range(L):
             Winput += ' {:.3f}'.format(self.input[i])
         print(Winput)
 
+        self.rankMethods()
+        
+        return
+    def rankMethods(self):
+        '''
+        produce list of methods ranked by smallest chi2PMT and chi2All
+        '''
+        A = self.analysisResults
+        iAll,iPMT = 0,1
+        s_PMT = sorted(A.items(), key=lambda A : A[1][iPMT])
+        s_All = sorted(A.items(), key=lambda A : A[1][iAll])
+        for i,word in zip( [iAll, iPMT], ['All', 'PMT']):
+            print('\ntwofold.rankMethods Ranked by Chi2'+word)
+            for X in s_PMT:
+                method = X[0]
+                Chi2   = X[1][i]
+                print(method,'{:.3f}'.format(Chi2))
+        return
+    def plotResults(self,fitresults,method,timestamp):
+        '''
+        plot fitresults for minimization method for job specified by timestamp
+        '''
+        results = numpy.array( fitresults[method] )
+        if method in self.analysisResults:
+            chi2All, chi2PMT = self.analysisResults[method]
+        else:
+            chi2All, chi2PMT = -1., -1.
+        Nevts = len(results)
+        Input   = self.input
+        #print('twofold.plotResults Input',Input)
+
+        nrows, ncols = 2,4
+        fig, ax = plt.subplots(nrows=nrows,ncols=ncols, sharey='all')
+        for iPMT in range(self.nPMT):
+            irow, icol = iPMT//ncols, iPMT%ncols
+            label = 'S'+str(iPMT)
+            ax[irow,icol].hist( results[:,iPMT])
+            mean,std = numpy.mean(results[:,iPMT]),numpy.std(results[:,iPMT])
+            title = 'mean {:.3f} input {:.3f}\nstd.dev. {:.3f}'.format(mean,Input[iPMT],std)
+            ax[irow,icol].set_title(title,fontsize=7,y=1.0-0.11)
+            ax[irow,icol].set_xlabel(label,labelpad=-125,loc='right')
+            ax[irow,icol].axline( (Input[iPMT],0), (Input[iPMT],+1),color= 'red')
+        wChi2 = ' $\chi^2=$ {:.2f}'.format(chi2PMT)
+        Title = 'Results with method ' + method + wChi2 + '\n'+str(Nevts) + ' evts gen`d ' + timestamp
+        fig.suptitle(Title)
+        pdf = self.figDir + method + '.pdf'
+        plt.savefig(pdf)
+        print('twofold.plotResults Wrote',pdf)
+        plt.show()
+        return
+    def readAndAnalyze(self,timestamp):
+        '''
+        read and analyze data from pickle file specified by timestamp
+        '''
+        Input, fitresults = self.readPickle(timestamp)
+        self.input = Input
+        self.analyzeResults(fitresults)
+        methods = fitresults.keys()
+        for method in methods:
+            self.plotResults(fitresults,method,timestamp)
         return
     def main(self):
 
-        self.debug = -1
+
 
         ## these are minimization methods for scipy 1.8.1
-        ## Unconstrained: CG, BFGS 
-        ## bound-constrained : 'Nelder-Mead'
+        ## Unconstrained: CG, BFGS -- These methods frequently fail with message "Desired error not necessarily achieved due to precision loss." so omit them
+        ## bound-constrained : 'Nelder-Mead','Powell','L-BFGS-B' --- best performance is achieved with the later
         methods = []
-        unconstrained_methods = ['CG','BFGS']
-        boundconstrained_methods = ['Nelder-Mead','Powell','L-BFGS-B']
+        unconstrained_methods = [] # ['CG','BFGS']
+        boundconstrained_methods = ['L-BFGS-B']
+        self.bounded = {}
+        for method in unconstrained_methods: self.bounded[method] = False
+        for method in boundconstrained_methods: self.bounded[method] = True
         methods.extend( unconstrained_methods )
         methods.extend( boundconstrained_methods )
         
-        toyMC = True
+        toyMC = self.toyMC
         Nexpt = 1
         if toyMC:
-            Nexpt = 1000
+            Nexpt = self.nToy
             Nguess = 5000.
             self.input = [1.2 - numpy.random.random()*0.4 for x in range(self.Npmt)]
             print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input))
@@ -198,7 +347,7 @@ class twofold():
             
         fitresults = {m:[] for m in methods}
         for expt in range(Nexpt):
-            print('twofold.main expt',expt)
+            words = 'twofold.main expt '+str(expt)
             if toyMC:
                 self.inputData = self.oneExpt()
             else:
@@ -209,10 +358,33 @@ class twofold():
             for method in methods:
                 fitpar = self.find(method=method,Nguess=Nguess)
                 fitresults[method].append( fitpar )
+                chi2 = self.chisqr(fitpar)
+                words += ' {:} {:.3f}'.format(method,chi2)
+            print(words)
             #print('fitresults',fitresults)
-        if toyMC : self.analyzeResults(fitresults)
+        if toyMC :
+            self.writePickle(self.input, fitresults)
+            self.analyzeResults(fitresults)
+            for method in methods:
+                self.plotResults(fitresults,method,self.now)
         return
 if __name__ == '__main__' :
-    P = twofold()
-    P.main()
+    debug = -1
+    nToy  = 0
+    timestamp = None
+    if len(sys.argv)>1 :
+        if 'help' in sys.argv[1].lower():
+            print('USAGE: python twofold.py debug[{0}] nToy[{1}] timestamp[{2}]'.format(debug,nToy,timestamp))
+            print('USAGE: if timestamp is not None, the analyze data corresponding to timestamp')
+            sys.exit()
+    
+    if len(sys.argv)>1 : debug = int(sys.argv[1])
+    if len(sys.argv)>2 : nToy  = int(sys.argv[2])
+    if len(sys.argv)>3 : timestamp = sys.argv[3]
+    
+    P = twofold(debug=debug,nToy=nToy)
+    if timestamp is None:
+        P.main()
+    else:
+        P.readAndAnalyze(timestamp)
     
