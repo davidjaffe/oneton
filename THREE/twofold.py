@@ -16,6 +16,7 @@ import sys
 import math
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
+from scipy.stats import pearsonr
 
 class twofold():
     def __init__(self,debug=-1,nToy=0):
@@ -370,8 +371,9 @@ class twofold():
             ax[ia].plot(x,Y,'o-',label=name)
             ax[ia].set_ylabel(name)
             ax[ia].grid()
-            rcorr, pval = scipy.stats.pearsonr(chi2pmts, Y)
-            print('twofold.plotMany corr between $\chi^2(PMT)$ and',name,'rcorr',rcorr,'p-value',pval)
+            rcorr, pval = pearsonr(chi2pmts, Y)
+            text = 'r {:.3f} p {:.4f}'.format(rcorr,pval)
+            print('twofold.plotMany corr between $\chi^2(PMT)$ and',name,text)
 #            if name=='$\chi^2(PMT)$' : ax[ia].set_yscale("log")
         plt.show()
         return
@@ -416,7 +418,7 @@ class twofold():
         if toyMC:
             Nexpt = self.nToy
             Nguess = 5000.
-            span = 0.6 # 0.4
+            span = 0.8 # 0.4
             self.input = [1.+span/2. - numpy.random.random()*span for x in range(self.Npmt)]
             p = numpy.prod( self.input )
             print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input),'span {:.2f} product {:.3f}'.format(span,p))
