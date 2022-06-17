@@ -229,10 +229,12 @@ class twofold():
     def analyzeResults(self,fitresults):
         '''
         compare fitresults with input for toyMC
+        return Chi2All and Chi2PMT
         '''
         print('\ntwofold.analyzeResults')
         L = len(self.input)
         means,stddevs = {},{}
+        CHI2ALL, CHI2PMT = {},{}
         for method in fitresults:
             means[method],stddevs[method] = [],[]
             results = numpy.array( fitresults[method] )
@@ -252,16 +254,20 @@ class twofold():
                 Sresult += ' {:.3f}'.format(s)
             print(Mresult)
             print(Sresult)
+            CHI2ALL[method], CHI2PMT[method] = chi2All,chi2PMT
             print(method,'Chi2All {:.2f} Chi2PMT {:.2f}'.format(chi2All,chi2PMT))
             self.analysisResults[method] = [chi2All, chi2PMT]
         Winput = 'Input pararameters'
         for i in range(L):
             Winput += ' {:.3f}'.format(self.input[i])
+        AA = self.input[:self.Npmt]
+        m,p,s,span = numpy.mean(AA), numpy.prod(AA), numpy.std(AA), numpy.max(AA)-numpy.min(AA)
+        Winput += ' mean {:.3f} prod {:.3f} stddev {:.3f} span {:3f}'.format(m,p,s,span)
         print(Winput)
 
         self.rankMethods()
         
-        return
+        return CHI2ALL, CHI2PMT
     def rankMethods(self):
         '''
         produce list of methods ranked by smallest chi2PMT and chi2All
@@ -315,14 +321,81 @@ class twofold():
         '''
         Input, fitresults = self.readPickle(timestamp)
         self.input = Input
-        self.analyzeResults(fitresults)
+        CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
         methods = fitresults.keys()
         for method in methods:
             self.plotResults(fitresults,method,timestamp)
         return
+    def analyzeMany(self,timestamps,method = 'L-BFGS-B'):
+        '''
+        read and analyze many toy mc given  pickle files specified by list of timestamps
+        for a single minimization method
+        '''
+        bigDict = {}
+        method = 'L-BFGS-B'
+        for timestamp in timestamps:
+            Input, fitresults = self.readPickle(timestamp)
+            self.input = Input
+            CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
+            if method in CHI2ALL:
+                bigDict[timestamp] = [Input,CHI2ALL, CHI2PMT]
+        if len(bigDict)>0 : self.plotMany(method,bigDict)
+        return
+    def plotMany(self, method, bigDict):
+        '''
+        plot results from many toyMC
+        '''
+        print('twofold.plotMany method',method,'# points',len(bigDict))
+        t_sort = sorted(bigDict) # sorted list of timestamps
+        chi2pmts,means,prods,stds,spans = [],[],[],[],[]
+        x = []
+        for ix,timestamp in enumerate(t_sort):
+            x.append(ix)
+            Input, CHI2ALL, CHI2PMT = bigDict[timestamp]
+            chi2All, chi2PMT = CHI2ALL[method], CHI2PMT[method]
+            chi2pmts.append(chi2PMT)
+            AA = Input[:self.Npmt]
+            m,p,s,span = numpy.mean(AA), numpy.prod(AA), numpy.std(AA), numpy.max(AA)-numpy.min(AA)
+            means.append(m)
+            prods.append(p)
+            stds.append(s)
+            spans.append(span)
+        
+        bigY = [chi2pmts, means, prods, stds, spans]
+        Ynames= ['$\chi^2(PMT)$','Mean','Prod','StdDev','Span']
+        nrows,ncols = 5,1
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, sharex='all')
+        for ia,Y in enumerate(bigY):
+            name = Ynames[ia]
+            ax[ia].plot(x,Y,'o-',label=name)
+            ax[ia].set_ylabel(name)
+            ax[ia].grid()
+#            if name=='$\chi^2(PMT)$' : ax[ia].set_yscale("log")
+        plt.show()
+        return
+    def getTimestamps(self):
+        '''
+        get list of timestamps that have directories with pickle files
+        '''
+        maindir = self.rootDir
+        timestamps = []
+        for d in os.listdir(maindir):
+            md = maindir + d
+            for root, dirs, files in os.walk(md):
+                for file in files:
+                    if file.endswith('pickle'): timestamps.append( d )
+        print('twofold.getTimestamps Found',len(timestamps),'directories with pickle files')
+        return timestamps
+    def MANY(self):
+        '''
+        main routine for analyzing many toy MC
+        '''
+        timestamps = self.getTimestamps()
+        method = 'L-BFGS-B'
+        bigDict = self.analyzeMany(timestamps,method=method)
+        if len(bigDict)>0  : self.plotMany(method,bigDict)
+        return
     def main(self):
-
-
 
         ## these are minimization methods for scipy 1.8.1
         ## Unconstrained: CG, BFGS -- These methods frequently fail with message "Desired error not necessarily achieved due to precision loss." so omit them
@@ -341,20 +414,25 @@ class twofold():
         if toyMC:
             Nexpt = self.nToy
             Nguess = 5000.
-            self.input = [1.2 - numpy.random.random()*0.4 for x in range(self.Npmt)]
-            print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input))
+            span = 0.6 # 0.4
+            self.input = [1.+span/2. - numpy.random.random()*span for x in range(self.Npmt)]
+            p = numpy.prod( self.input )
+            print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input),'span {:.2f} product {:.3f}'.format(span,p))
             self.input.append( Nguess )
             
         fitresults = {m:[] for m in methods}
         for expt in range(Nexpt):
             words = 'twofold.main expt '+str(expt)
-            if toyMC:
+            
+            if toyMC:   ##### Toy MC generation
                 self.inputData = self.oneExpt()
-            else:
-
+                chi2 = self.chisqr( self.input )
+                words += ' {:} {:.3f}'.format('TruePar',chi2)
+            else:       ##### data processing
                 self.inputData = self.TwoFold['DATA']
                 Nguess = self.maximum['DATA']
 
+            
             for method in methods:
                 fitpar = self.find(method=method,Nguess=Nguess)
                 fitresults[method].append( fitpar )
@@ -364,7 +442,7 @@ class twofold():
             #print('fitresults',fitresults)
         if toyMC :
             self.writePickle(self.input, fitresults)
-            self.analyzeResults(fitresults)
+            CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
             for method in methods:
                 self.plotResults(fitresults,method,self.now)
         return
@@ -375,7 +453,8 @@ if __name__ == '__main__' :
     if len(sys.argv)>1 :
         if 'help' in sys.argv[1].lower():
             print('USAGE: python twofold.py debug[{0}] nToy[{1}] timestamp[{2}]'.format(debug,nToy,timestamp))
-            print('USAGE: if timestamp is not None, the analyze data corresponding to timestamp')
+            print('USAGE: if timestamp is not None, then analyze data corresponding to timestamp')
+            print('USAGE: if timestamp==`MANY`, then analyze data from many timestamps')
             sys.exit()
     
     if len(sys.argv)>1 : debug = int(sys.argv[1])
@@ -385,6 +464,8 @@ if __name__ == '__main__' :
     P = twofold(debug=debug,nToy=nToy)
     if timestamp is None:
         P.main()
+    elif timestamp=='MANY':
+        P.MANY()
     else:
         P.readAndAnalyze(timestamp)
     
