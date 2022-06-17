@@ -370,6 +370,8 @@ class twofold():
             ax[ia].plot(x,Y,'o-',label=name)
             ax[ia].set_ylabel(name)
             ax[ia].grid()
+            rcorr, pval = scipy.stats.pearsonr(chi2pmts, Y)
+            print('twofold.plotMany corr between $\chi^2(PMT)$ and',name,'rcorr',rcorr,'p-value',pval)
 #            if name=='$\chi^2(PMT)$' : ax[ia].set_yscale("log")
         plt.show()
         return
