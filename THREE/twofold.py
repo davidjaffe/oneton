@@ -20,7 +20,7 @@ from scipy.stats import pearsonr
 
 class twofold():
     def __init__(self,debug=-1,nToy=0):
-
+        
 ### usual directory structure to preserve output(log,figures,pickle,...) of each job
         now = datetime.datetime.now()
         self.now = now.strftime('%Y%m%dT%H%M%S')
@@ -97,12 +97,6 @@ class twofold():
         if self.debug > 0 : print('twofold.__init__ prob',self.prob)
         print('twofold.__init__ maximum',maximum)
 
-### store analysis results
-### chi2All = sum_all [(best fit - input)/standard deviation]^2
-### chi2PMT = sum_PMT [(best fit - input)/standard deviation]^2
-### all includes number of input events
-
-        self.analysisResults = {} # [method: [chi2All, chi2PMT]]
         
 
         self.figDir = self.Figures #'TWOFOLD_FIGURES/'
@@ -137,9 +131,11 @@ class twofold():
 
         print('twofold.writePickle Wrote',pickle_fn)
         return
-    def oneExpt(self):
+    def oneExptOLD(self):
         '''
-        return 'Data' for one generated experiment given input efficiencies and number of events
+        return Random 'Data' for one generated experiment given input efficiencies and number of events
+
+        OLD VERSION: TOO CLEVER, OUTPUT DATA IS NOT SYMMETRIC ABOUT DIAGONAL
         '''
         NN = self.Npmt*self.Npmt
         eff = self.input[:self.Npmt]
@@ -157,9 +153,30 @@ class twofold():
         X = numpy.fix( X )
         X = X.reshape(self.Npmt,self.Npmt)
         return X
+    def oneExpt(self):
+        '''
+        return Random 'Data' for one generated experiment given input efficiencies and number of events
+        '''
+        NN = self.Npmt*self.Npmt
+        eff = self.input[:self.Npmt]
+        epp = []
+        for i in range(self.Npmt):
+            for j in range(self.Npmt):
+                epp.append( eff[i]*eff[j]*self.prob[i,j] )
+        epp = numpy.array(epp).reshape(self.Npmt,self.Npmt)
+        X = numpy.zeros( NN ).reshape(self.Npmt,self.Npmt)
+        N   = self.input[self.Npmt]
+        for evt in numpy.arange(N):
+            for i in range(self.Npmt):
+                for j in range(i+1,self.Npmt):
+                    if numpy.random.random()<=epp[i,j]:
+                        X[i,j] += 1.
+                        X[j,i] += 1.
+        X = numpy.fix( X )
+        return X
     def oneTrueExpt(self):
         '''
-        return 'Data' for one generated experiment given input efficiencies and number of events
+        return TRUE 'Data' for one generated experiment given input efficiencies and number of events
         '''
         eff = self.input[:self.Npmt]
         N   = self.input[self.Npmt]
@@ -173,6 +190,30 @@ class twofold():
         return X
     def chisqr(self,param):
         '''
+        chisquared = sum_i=0,7 sum_j=i+1,7 (Cij - effi*effj*Pij*N)^2 / Cij
+        C[i,j] = count rate in date for coincidence between PMTs i and j
+        P[i,j] = probability of coincidence between PMTs i,j
+        effi = efficiency of PMT i ( = param[0:8] )
+        N = total number of data events = FIXED
+
+        add array self.csTerms to pass individual terms for debugging
+        '''
+        eff = param[:self.Npmt]
+        N   = self.FixedN
+        cs = 0.
+        self.csTerms = numpy.zeros( self.Npmt*self.Npmt ).reshape( (self.Npmt,self.Npmt) )
+        C = self.inputData # TwoFold['DATA']
+        P = self.prob
+        for i in range(self.nPMT):
+            for j in range(i+1,self.nPMT):
+                num = (C[i,j] - eff[i]*eff[j]*P[i,j]*N)
+                self.csTerms[i,j] = num
+                cs += num*num/C[i,j]
+        return cs
+    def chisqrNINE(self,param):
+        '''
+        OLDER VERSION OF CHISQ WITH NINE PARAMETERS : 8 Efficiencies and N=total events
+
         chisquared = sum_i=0,7 sum_j=i+1,7 (Cij - effi*effj*Pij*N)^2 / Cij
         C[i,j] = count rate in date for coincidence between PMTs i and j
         P[i,j] = probability of coincidence between PMTs i,j
@@ -193,12 +234,17 @@ class twofold():
         '''
         return best fit parameters from fit
         '''
-        
+        ## initial guesses and bounds for parameters
         param = [1. for x in range(self.nPMT)]
         bounds = [(None,None) for x in range(self.nPMT)]
-        bounds.append( (self.maximum['DATA'], 2.*Nguess) )
-        param.append(Nguess)
+
+        self.FixedN = Nguess
+#        bounds.append( (0.999*Nguess,1.001*Nguess) )  #(self.maximum['DATA'], 2.*Nguess) )
+#        param.append(Nguess)
         chi2 = self.chisqr(param)
+        if self.debug > 2 :
+            with numpy.printoptions(precision=1,linewidth=200,suppress=True):
+                print('\ntwofold.find Initial-values chisquare terms\n',numpy.array(self.csTerms))
         
         if self.debug > 0: 
             print('\ntwofold.find method',method)
@@ -215,6 +261,10 @@ class twofold():
         hess_inv = res.get('direc') #???
         success = res.get('success')
         chi2 = self.chisqr(pout)
+        if self.debug > 2 :
+            with numpy.printoptions(precision=1,linewidth=200,suppress=True):
+                print('\ntwofold.find Best-fit chisquare terms\n',numpy.array(self.csTerms))
+
         fitpar = 'twofold.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
         if self.debug > 1:
             print('twofold.find res.keys()',res.keys())
@@ -233,10 +283,19 @@ class twofold():
         return Chi2All and Chi2PMT
         '''
         print('\ntwofold.analyzeResults')
-        L = len(self.input)
+#        L = len(self.input)
+        
+### store analysis results
+### chi2All = sum_all [(best fit - input)/standard deviation]^2
+### chi2PMT = sum_PMT [(best fit - input)/standard deviation]^2
+### all includes number of input events
+
+        self.analysisResults = {} # [method: [chi2All, chi2PMT]]
+        
         means,stddevs = {},{}
         CHI2ALL, CHI2PMT = {},{}
         for method in fitresults:
+            L = len(fitresults[method][0])
             means[method],stddevs[method] = [],[]
             results = numpy.array( fitresults[method] )
             #print('method,results',method,results)
@@ -340,8 +399,7 @@ class twofold():
             CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
             if method in CHI2ALL:
                 bigDict[timestamp] = [Input,CHI2ALL, CHI2PMT]
-        if len(bigDict)>0 : self.plotMany(method,bigDict)
-        return
+        return bigDict
     def plotMany(self, method, bigDict):
         '''
         plot results from many toyMC
@@ -370,11 +428,31 @@ class twofold():
             name = Ynames[ia]
             ax[ia].plot(x,Y,'o-',label=name)
             ax[ia].set_ylabel(name)
+            ax[ia].set_xticks(x)
+            ax[ia].set_xticklabels(t_sort,rotation=90.)
             ax[ia].grid()
             rcorr, pval = pearsonr(chi2pmts, Y)
             text = 'r {:.3f} p {:.4f}'.format(rcorr,pval)
             print('twofold.plotMany corr between $\chi^2(PMT)$ and',name,text)
-#            if name=='$\chi^2(PMT)$' : ax[ia].set_yscale("log")
+            if name=='$\chi^2(PMT)$' :
+                ax[ia].set_ylim( (0.8*min(Y), 1.1*max(Y)) )
+                ax[ia].set_yscale("log")
+        plt.show()
+        return
+    def dPLOT(self,X1, X2):
+        '''
+        two-d plots
+        '''
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(nrows=2,ncols=2)
+        im = ax1.imshow( numpy.array(X1), origin='lower' )
+        fig.colorbar(im, ax=ax1)
+        im = ax2.imshow( numpy.array(X2), origin='lower' )
+        fig.colorbar(im, ax=ax2)
+        im = ax3.imshow( numpy.array(X1)-numpy.array(X2), origin='lower')
+        fig.colorbar(im, ax=ax3)
+        ax1.set_ylabel('input')
+        ax2.set_ylabel('true')
+        ax3.set_ylabel('input-true')
         plt.show()
         return
     def getTimestamps(self):
@@ -389,7 +467,7 @@ class twofold():
                 for file in files:
                     if file.endswith('pickle'): timestamps.append( d )
         print('twofold.getTimestamps Found',len(timestamps),'directories with pickle files')
-        return timestamps
+        return sorted(timestamps)
     def MANY(self):
         '''
         main routine for analyzing many toy MC
@@ -398,12 +476,19 @@ class twofold():
         method = 'L-BFGS-B'
         bigDict = self.analyzeMany(timestamps,method=method)
         if len(bigDict)>0  : self.plotMany(method,bigDict)
+        print('twofold.MANY log in',self.logDir)
         return
     def main(self):
+        '''
+        Fit real or fake data.
 
-        ## these are minimization methods for scipy 1.8.1
-        ## Unconstrained: CG, BFGS -- These methods frequently fail with message "Desired error not necessarily achieved due to precision loss." so omit them
-        ## bound-constrained : 'Nelder-Mead','Powell','L-BFGS-B' --- best performance is achieved with the later
+        These are minimization methods for scipy 1.8.1
+        Unconstrained: CG, BFGS -- These methods frequently fail with message "Desired error not necessarily achieved due to precision loss." so omit them
+        bound-constrained : 'Nelder-Mead','Powell','L-BFGS-B' --- best performance is achieved with the later
+        '''
+
+        debugPLOT = False ## activates use of dPLOT
+        
         methods = []
         unconstrained_methods = [] # ['CG','BFGS']
         boundconstrained_methods = ['L-BFGS-B']
@@ -422,6 +507,7 @@ class twofold():
             self.input = [1.+span/2. - numpy.random.random()*span for x in range(self.Npmt)]
             p = numpy.prod( self.input )
             print('twofold.main toyMC input effy',' %.2f'*len(self.input)%tuple(self.input),'span {:.2f} product {:.3f}'.format(span,p))
+            self.FixedN = Nguess
             self.input.append( Nguess )
             
         fitresults = {m:[] for m in methods}
@@ -430,11 +516,15 @@ class twofold():
             
             if toyMC:   ##### Toy MC generation
                 self.inputData = self.oneExpt()
+                if debugPLOT :
+                    Xtrue = self.oneTrueExpt()
+                    self.dPLOT( self.inputData, Xtrue )
                 chi2 = self.chisqr( self.input )
                 words += ' {:} {:.3f}'.format('TruePar',chi2)
             else:       ##### data processing
                 self.inputData = self.TwoFold['DATA']
                 Nguess = self.maximum['DATA']
+                self.FixedN = Nguess
 
             
             for method in methods:
