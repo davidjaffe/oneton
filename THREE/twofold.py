@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.stats import pearsonr
 
+import iminuit
+
 class twofold():
     def __init__(self,debug=-1,nToy=0):
         
@@ -233,6 +235,8 @@ class twofold():
     def find(self,method='Powell',Nguess = 5000.):
         '''
         return best fit parameters from fit
+
+        20220622 if method='migrad' or 'simplex', use iminuit interface
         '''
         ## initial guesses and bounds for parameters
         param = [1. for x in range(self.nPMT)]
@@ -251,30 +255,44 @@ class twofold():
             print('twofold.find chi2',chi2,'with input params',param)
         ## after 20220616T165320 don't give bounds for unbounded methods
         disp = self.debug > 1
-        if self.bounded[method]: 
-            res = minimize(self.chisqr, param, method=method,bounds=bounds)
+        if method=='migrad' or method=='simplex':
+            iminuit.Minuit.strategy = 2
+            res = iminuit.minimize,minimize(self.chisqr, param, options={'disp':disp}) # migrad is default
         else:
-            res = minimize(self.chisqr, param, method=method, options={'disp':disp})
+            if self.bounded[method]: 
+                res = minimize(self.chisqr, param, method=method,bounds=bounds)
+            else:
+                res = minimize(self.chisqr, param, method=method, options={'disp':disp})
             
-        if self.debug > 1 : print('twofold.find res',res)
-        pout = res.get('x')
-        hess_inv = res.get('direc') #???
-        success = res.get('success')
+        if self.debug > 1 :
+            print('twofold.find res',res)
+            print('twofold.find res[-1][x]',res[-1]['x'])
+        if method=='migrad' or method=='simplex':
+            pout = res[-1]['x']
+            hess_inv = res[-1]['hess_inv']
+            success  = res[-1]['success']
+            message = res[-1]['message']
+        else:
+            pout = res.get('x')
+            hess_inv = res.get('direc') #???
+            success = res.get('success')
+            message = res.get('message')
         chi2 = self.chisqr(pout)
         if self.debug > 2 :
             with numpy.printoptions(precision=1,linewidth=200,suppress=True):
                 print('\ntwofold.find Best-fit chisquare terms\n',numpy.array(self.csTerms))
+            with numpy.printoptions(precision=6,linewidth=300,suppress=True):
+                print('\ntwofold.find hess_inv\n',hess_inv)
 
         fitpar = 'twofold.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
         if self.debug > 1:
-            print('twofold.find res.keys()',res.keys())
             print('twofold.find hess_inv',hess_inv)
         for i,p in enumerate(pout):
             punc = 0.
             if hess_inv is not None: punc = math.sqrt(max(0.,hess_inv[i,i]))
             fitpar += ' {0:.3f}({1:.3f})'.format(p,punc)
 
-        if not success : fitpar += ' FIT FAILED. ' + res.get('message')
+        if not success : fitpar += ' FIT FAILED. ' + message
         if self.debug > 0 or not success: print(fitpar)
         return pout
     def analyzeResults(self,fitresults):
@@ -497,6 +515,8 @@ class twofold():
         for method in boundconstrained_methods: self.bounded[method] = True
         methods.extend( unconstrained_methods )
         methods.extend( boundconstrained_methods )
+
+        methods = ["migrad"]
         
         toyMC = self.toyMC
         Nexpt = 1
