@@ -266,27 +266,28 @@ class twofold():
             
         if self.debug > 1 :
             print('twofold.find res',res)
-            print('twofold.find res[-1][x]',res[-1]['x'])
-        if method=='migrad' or method=='simplex':
-            pout = res[-1]['x']
-            hess_inv = res[-1]['hess_inv']
-            success  = res[-1]['success']
-            message = res[-1]['message']
-        else:
-            pout = res.get('x')
-            hess_inv = res.get('direc') #???
-            success = res.get('success')
-            message = res.get('message')
+        if method=='migrad' or method=='simplex': ### deal with idiosyncracy of iminuit.minimize.minimize()
+            res = res[-1]
+        pout = res.get('x')        
+        hess_inv = res.get('hess_inv') # 
+        if type(hess_inv)!=numpy.ndarray : # then it is a useless object, so replace it
+            if self.debug > 1 : print('twofold.find hess_inv is a useless object, so replace it zeros')
+            hess_inv = numpy.zeros( self.nPMT*self.nPMT).reshape( (self.nPMT,self.nPMT) )
+        success = res.get('success')
+        message = res.get('message')
         chi2 = self.chisqr(pout)
+        
         if self.debug > 2 :
             with numpy.printoptions(precision=1,linewidth=200,suppress=True):
                 print('\ntwofold.find Best-fit chisquare terms\n',numpy.array(self.csTerms))
             with numpy.printoptions(precision=6,linewidth=300,suppress=True):
                 print('\ntwofold.find hess_inv\n',hess_inv)
+            if method=='migrad' or method=='simplex':
+                print('twofold.find iminuit.Minuit.accurate',str(iminuit.Minuit.accurate))
 
         fitpar = 'twofold.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
         if self.debug > 1:
-            print('twofold.find hess_inv',hess_inv)
+            print('twofold.find hess_inv\n',hess_inv)
         for i,p in enumerate(pout):
             punc = 0.
             if hess_inv is not None: punc = math.sqrt(max(0.,hess_inv[i,i]))
