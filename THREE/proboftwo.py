@@ -59,12 +59,13 @@ class proboftwo():
                        700: [1.19, 0.98, 0.70, 0.89, 0.65, 0.33, 1.18, 1.19]}
         self.coincRate = {300: [1160, 1203, 1259],
                           500: [1927, 1994, 1989],
-                          700: [2485, 2501, 2523]}  # EVEN, RED, INNER coincidence criteria
+                          700: [2485, 2501, 2523]}  # EVEN, RED, INNER coincidences in 10k events from WbLS_0802_2022
         self.coincDef  = {'EVEN': [0,2,4,6],
                           'RED' : [0,2,5,7],
                           'INNER':[1,2,5,7]} # definitions of coincidence criteria
         self.nSim = 10000 # number of simulated zero momentum muon events per LY
         self.Npmt = self.nPMT = 8
+        self.MEANS = {}
 
 			
         return
@@ -97,379 +98,71 @@ class proboftwo():
 
         print('proboftwo.writePickle Wrote',pickle_fn)
         return
-    def oneExptOLD(self):
+    def oneEvent(self,LY,coincType):
         '''
-        return Random 'Data' for one generated experiment given input efficiencies and number of events
-
-        OLD VERSION: TOO CLEVER, OUTPUT DATA IS NOT SYMMETRIC ABOUT DIAGONAL
+        return list of generated number of PE for each PMT given 
+        LY and coincType which determines meanPE per PMT and PMTs to consider for coincidences
         '''
-        NN = self.Npmt*self.Npmt
-        eff = self.input[:self.Npmt]
-        epp = []
-        for i in range(self.Npmt):
-            for j in range(self.Npmt):
-                epp.append( eff[i]*eff[j]*self.prob[i,j] )
-        epp = numpy.array(epp)
-        X = numpy.zeros( NN )
-        Ones = numpy.ones( NN )
-        N   = self.input[self.Npmt]
-        for evt in numpy.arange(N):
-            R = numpy.random.random( NN )
-            X += (R<=epp)*Ones
-        X = numpy.fix( X )
-        X = X.reshape(self.Npmt,self.Npmt)
-        return X
-    def oneExpt(self):
+        means = self.REDUCE(LY,coincType)
+        genPE = []
+        for m in means:
+            genPE.append( poisson.rvs(m) )
+        return genPE
+    def coinc(self,genPE,criterion='>1'):
         '''
-        return Random 'Data' for one generated experiment given input efficiencies and number of events
+        return True if genPE satisfies requirement of >1 hit in 2 or more PMTs
         '''
-        NN = self.Npmt*self.Npmt
-        eff = self.input[:self.Npmt]
-        epp = []
-        for i in range(self.Npmt):
-            for j in range(self.Npmt):
-                epp.append( eff[i]*eff[j]*self.prob[i,j] )
-        epp = numpy.array(epp).reshape(self.Npmt,self.Npmt)
-        X = numpy.zeros( NN ).reshape(self.Npmt,self.Npmt)
-        N   = self.input[self.Npmt]
-        for evt in numpy.arange(N):
-            for i in range(self.Npmt):
-                for j in range(i+1,self.Npmt):
-                    if numpy.random.random()<=epp[i,j]:
-                        X[i,j] += 1.
-                        X[j,i] += 1.
-        X = numpy.fix( X )
-        return X
-    def oneTrueExpt(self):
-        '''
-        return TRUE 'Data' for one generated experiment given input efficiencies and number of events
-        '''
-        eff = self.input[:self.Npmt]
-        N   = self.input[self.Npmt]
-        X = numpy.zeros( self.Npmt*self.Npmt ).reshape( (self.Npmt,self.Npmt) )
-        for i in range(self.Npmt):
-            for j in range(self.Npmt):
-                v = 0. 
-                if i!=j : v = eff[i]*eff[j]*self.prob[i,j]*N
-                X[i,j] += v
-        X = numpy.fix( X )
-        return X
-    def chisqr(self,param):
-        '''
-        chisquared = sum_i=0,7 sum_j=i+1,7 (Cij - effi*effj*Pij*N)^2 / Cij
-        C[i,j] = count rate in date for coincidence between PMTs i and j
-        P[i,j] = probability of coincidence between PMTs i,j
-        effi = efficiency of PMT i ( = param[0:8] )
-        N = total number of data events = FIXED
-
-        add array self.csTerms to pass individual terms for debugging
-        '''
-        eff = param[:self.Npmt]
-        N   = self.FixedN
-        cs = 0.
-        self.csTerms = numpy.zeros( self.Npmt*self.Npmt ).reshape( (self.Npmt,self.Npmt) )
-        C = self.inputData # Proboftwo['DATA']
-        P = self.prob
-        for i in range(self.nPMT):
-            for j in range(i+1,self.nPMT):
-                num = (C[i,j] - eff[i]*eff[j]*P[i,j]*N)
-                self.csTerms[i,j] = num
-                cs += num*num/C[i,j]
-        return cs
-    def chisqrNINE(self,param):
-        '''
-        OLDER VERSION OF CHISQ WITH NINE PARAMETERS : 8 Efficiencies and N=total events
-
-        chisquared = sum_i=0,7 sum_j=i+1,7 (Cij - effi*effj*Pij*N)^2 / Cij
-        C[i,j] = count rate in date for coincidence between PMTs i and j
-        P[i,j] = probability of coincidence between PMTs i,j
-        effi = efficiency of PMT i ( = param[0:8] )
-        N = total number of data events ( = param[8] )
-        '''
-        eff = param[0:8]
-        N   = param[8]
-        cs = 0.
-        C = self.inputData # Proboftwo['DATA']
-        P = self.prob
-        for i in range(self.nPMT):
-            for j in range(i+1,self.nPMT):
-                num = (C[i,j] - eff[i]*eff[j]*P[i,j]*N)
-                cs += num*num/C[i,j]
-        return cs
-    def find(self,method='Powell',Nguess = 5000.):
-        '''
-        return best fit parameters from fit
-
-        20220622 if method='migrad' or 'simplex', use iminuit interface
-        '''
-        ## initial guesses and bounds for parameters
-        param = [1. for x in range(self.nPMT)]
-        bounds = [(None,None) for x in range(self.nPMT)]
-
-        self.FixedN = Nguess
-#        bounds.append( (0.999*Nguess,1.001*Nguess) )  #(self.maximum['DATA'], 2.*Nguess) )
-#        param.append(Nguess)
-        chi2 = self.chisqr(param)
-        if self.debug > 2 :
-            with numpy.printoptions(precision=1,linewidth=200,suppress=True):
-                print('\nproboftwo.find Initial-values chisquare terms\n',numpy.array(self.csTerms))
-        
-        if self.debug > 0: 
-            print('\nproboftwo.find method',method)
-            print('proboftwo.find chi2',chi2,'with input params',param)
-        ## after 20220616T165320 don't give bounds for unbounded methods
-        disp = self.debug > 1
-        if method=='migrad' or method=='simplex':
-            iminuit.Minuit.strategy = 2
-            res = iminuit.minimize,minimize(self.chisqr, param, options={'disp':disp}) # migrad is default
+        if criterion=='>1':
+            c = sum([x>0 for x in genPE])>1
+        elif criterion=='>2':
+            c = sum([x>0 for x in genPE])>2
+        elif criterion=='>3':
+            c = sum([x>0 for x in genPE])>3
+        elif criterion=='==1':
+            c = sum([x>0 for x in genPE])==1
+        elif criterion=='==2':
+            c = sum([x>0 for x in genPE])==2
+        elif criterion=='==3':
+            c = sum([x>0 for x in genPE])==3
+        elif criterion=='==4':
+            c = sum([x>0 for x in genPE])==4
         else:
-            if self.bounded[method]: 
-                res = minimize(self.chisqr, param, method=method,bounds=bounds)
-            else:
-                res = minimize(self.chisqr, param, method=method, options={'disp':disp})
-            
-        if self.debug > 1 :
-            print('proboftwo.find res',res)
-        if method=='migrad' or method=='simplex': ### deal with idiosyncracy of iminuit.minimize.minimize()
-            res = res[-1]
-        pout = res.get('x')        
-        hess_inv = res.get('hess_inv') # 
-        if type(hess_inv)!=numpy.ndarray : # then it is a useless object, so replace it
-            if self.debug > 1 : print('proboftwo.find hess_inv is a useless object, so replace it zeros')
-            hess_inv = numpy.zeros( self.nPMT*self.nPMT).reshape( (self.nPMT,self.nPMT) )
-        success = res.get('success')
-        message = res.get('message')
-        chi2 = self.chisqr(pout)
-        
-        if self.debug > 2 :
-            with numpy.printoptions(precision=1,linewidth=200,suppress=True):
-                print('\nproboftwo.find Best-fit chisquare terms\n',numpy.array(self.csTerms))
-            with numpy.printoptions(precision=6,linewidth=300,suppress=True):
-                print('\nproboftwo.find hess_inv\n',hess_inv)
-            if method=='migrad' or method=='simplex':
-                print('proboftwo.find iminuit.Minuit.accurate',str(iminuit.Minuit.accurate))
-
-        fitpar = 'proboftwo.find {0} chi2 {1:.1f} fitpar '.format(method,chi2)
-        if self.debug > 1:
-            print('proboftwo.find hess_inv\n',hess_inv)
-        for i,p in enumerate(pout):
-            punc = 0.
-            if hess_inv is not None: punc = math.sqrt(max(0.,hess_inv[i,i]))
-            fitpar += ' {0:.3f}({1:.3f})'.format(p,punc)
-
-        if not success : fitpar += ' FIT FAILED. ' + message
-        if self.debug > 0 or not success: print(fitpar)
-        return pout
-    def analyzeResults(self,fitresults):
+            sys.exit('proboftwo.coinc ERROR Unknown criterion '+criterion)
+        return c
+    def oneExpt(self,LY,coincType,Nevt=-1,nCoinc=['>1']):
         '''
-        compare fitresults with input for toyMC
-        return Chi2All and Chi2PMT
+        return dict with the number of events with nCoinc coincidences among Nevt events 
+        given meanPE determined by LY and coincType 
+        using MC method
         '''
-        print('\nproboftwo.analyzeResults')
-#        L = len(self.input)
-        
-### store analysis results
-### chi2All = sum_all [(best fit - input)/standard deviation]^2
-### chi2PMT = sum_PMT [(best fit - input)/standard deviation]^2
-### all includes number of input events
-
-        self.analysisResults = {} # [method: [chi2All, chi2PMT]]
-        
-        means,stddevs = {},{}
-        CHI2ALL, CHI2PMT = {},{}
-        for method in fitresults:
-            L = len(fitresults[method][0])
-            means[method],stddevs[method] = [],[]
-            results = numpy.array( fitresults[method] )
-            #print('method,results',method,results)
-            Mresult = method + ' means'
-            Sresult = method + 'stddev'
-            chi2All, chi2PMT = 0., 0.
-            for i in range(L):
-                #if i==0: print('i,results[:,i]',i,results[:,i])
-                m,s = numpy.mean( results[:,i] ), numpy.std(results[:,i] )
-                c = (m-self.input[i])/s
-                chi2All += c*c
-                if i<self.nPMT : chi2PMT += c*c
-                means[method].append( m )
-                stddevs[method].append( s )
-                Mresult += ' {:.3f}'.format(m)
-                Sresult += ' {:.3f}'.format(s)
-            print(Mresult)
-            print(Sresult)
-            CHI2ALL[method], CHI2PMT[method] = chi2All,chi2PMT
-            print(method,'Chi2All {:.2f} Chi2PMT {:.2f}'.format(chi2All,chi2PMT))
-            self.analysisResults[method] = [chi2All, chi2PMT]
-        Winput = 'Input pararameters'
-        for i in range(L):
-            Winput += ' {:.3f}'.format(self.input[i])
-        AA = self.input[:self.Npmt]
-        m,p,s,span = numpy.mean(AA), numpy.prod(AA), numpy.std(AA), numpy.max(AA)-numpy.min(AA)
-        Winput += ' mean {:.3f} prod {:.3f} stddev {:.3f} span {:3f}'.format(m,p,s,span)
-        print(Winput)
-
-        self.rankMethods()
-        
-        return CHI2ALL, CHI2PMT
-    def rankMethods(self):
-        '''
-        produce list of methods ranked by smallest chi2PMT and chi2All
-        '''
-        A = self.analysisResults
-        iAll,iPMT = 0,1
-        s_PMT = sorted(A.items(), key=lambda A : A[1][iPMT])
-        s_All = sorted(A.items(), key=lambda A : A[1][iAll])
-        for i,word in zip( [iAll, iPMT], ['All', 'PMT']):
-            print('\nproboftwo.rankMethods Ranked by Chi2'+word)
-            for X in s_PMT:
-                method = X[0]
-                Chi2   = X[1][i]
-                print(method,'{:.3f}'.format(Chi2))
-        return
-    def plotResults(self,fitresults,method,timestamp):
-        '''
-        plot fitresults for minimization method for job specified by timestamp
-        '''
-        results = numpy.array( fitresults[method] )
-        if method in self.analysisResults:
-            chi2All, chi2PMT = self.analysisResults[method]
-        else:
-            chi2All, chi2PMT = -1., -1.
-        Nevts = len(results)
-        Input   = self.input
-        #print('proboftwo.plotResults Input',Input)
-
-        nrows, ncols = 2,4
-        fig, ax = plt.subplots(nrows=nrows,ncols=ncols, sharey='all')
-        for iPMT in range(self.nPMT):
-            irow, icol = iPMT//ncols, iPMT%ncols
-            label = 'S'+str(iPMT)
-            ax[irow,icol].hist( results[:,iPMT])
-            mean,std = numpy.mean(results[:,iPMT]),numpy.std(results[:,iPMT])
-            title = 'mean {:.3f} input {:.3f}\nstd.dev. {:.3f}'.format(mean,Input[iPMT],std)
-            ax[irow,icol].set_title(title,fontsize=7,y=1.0-0.11)
-            ax[irow,icol].set_xlabel(label,labelpad=-125,loc='right')
-            ax[irow,icol].axline( (Input[iPMT],0), (Input[iPMT],+1),color= 'red')
-        wChi2 = ' $\chi^2=$ {:.2f}'.format(chi2PMT)
-        Title = 'Results with method ' + method + wChi2 + '\n'+str(Nevts) + ' evts gen`d ' + timestamp
-        fig.suptitle(Title)
-        pdf = self.figDir + method + '.pdf'
-        plt.savefig(pdf)
-        print('proboftwo.plotResults Wrote',pdf)
-        plt.show()
-        return
-    def readAndAnalyze(self,timestamp):
-        '''
-        read and analyze data from pickle file specified by timestamp
-        '''
-        Input, fitresults = self.readPickle(timestamp)
-        self.input = Input
-        CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
-        methods = fitresults.keys()
-        for method in methods:
-            self.plotResults(fitresults,method,timestamp)
-        return
-    def analyzeMany(self,timestamps,method = 'L-BFGS-B'):
-        '''
-        read and analyze many toy mc given  pickle files specified by list of timestamps
-        for a single minimization method
-        '''
-        bigDict = {}
-        method = 'L-BFGS-B'
-        for timestamp in timestamps:
-            Input, fitresults = self.readPickle(timestamp)
-            self.input = Input
-            CHI2ALL, CHI2PMT = self.analyzeResults(fitresults)
-            if method in CHI2ALL:
-                bigDict[timestamp] = [Input,CHI2ALL, CHI2PMT]
-        return bigDict
-    def plotMany(self, method, bigDict):
-        '''
-        plot results from many toyMC
-        '''
-        print('proboftwo.plotMany method',method,'# points',len(bigDict))
-        t_sort = sorted(bigDict) # sorted list of timestamps
-        chi2pmts,means,prods,stds,spans = [],[],[],[],[]
-        x = []
-        for ix,timestamp in enumerate(t_sort):
-            x.append(ix)
-            Input, CHI2ALL, CHI2PMT = bigDict[timestamp]
-            chi2All, chi2PMT = CHI2ALL[method], CHI2PMT[method]
-            chi2pmts.append(chi2PMT)
-            AA = Input[:self.Npmt]
-            m,p,s,span = numpy.mean(AA), numpy.prod(AA), numpy.std(AA), numpy.max(AA)-numpy.min(AA)
-            means.append(m)
-            prods.append(p)
-            stds.append(s)
-            spans.append(span)
-        
-        bigY = [chi2pmts, means, prods, stds, spans]
-        Ynames= ['$\chi^2(PMT)$','Mean','Prod','StdDev','Span']
-        nrows,ncols = 5,1
-        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, sharex='all')
-        for ia,Y in enumerate(bigY):
-            name = Ynames[ia]
-            ax[ia].plot(x,Y,'o-',label=name)
-            ax[ia].set_ylabel(name)
-            ax[ia].set_xticks(x)
-            ax[ia].set_xticklabels(t_sort,rotation=90.)
-            ax[ia].grid()
-            rcorr, pval = pearsonr(chi2pmts, Y)
-            text = 'r {:.3f} p {:.4f}'.format(rcorr,pval)
-            print('proboftwo.plotMany corr between $\chi^2(PMT)$ and',name,text)
-            if name=='$\chi^2(PMT)$' :
-                ax[ia].set_ylim( (0.8*min(Y), 1.1*max(Y)) )
-                ax[ia].set_yscale("log")
-        plt.show()
-        return
-    def dPLOT(self,X1, X2):
-        '''
-        two-d plots
-        '''
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(nrows=2,ncols=2)
-        im = ax1.imshow( numpy.array(X1), origin='lower' )
-        fig.colorbar(im, ax=ax1)
-        im = ax2.imshow( numpy.array(X2), origin='lower' )
-        fig.colorbar(im, ax=ax2)
-        im = ax3.imshow( numpy.array(X1)-numpy.array(X2), origin='lower')
-        fig.colorbar(im, ax=ax3)
-        ax1.set_ylabel('input')
-        ax2.set_ylabel('true')
-        ax3.set_ylabel('input-true')
-        plt.show()
-        return
-    def getTimestamps(self):
-        '''
-        get list of timestamps that have directories with pickle files
-        '''
-        maindir = self.rootDir
-        timestamps = []
-        for d in os.listdir(maindir):
-            md = maindir + d
-            for root, dirs, files in os.walk(md):
-                for file in files:
-                    if file.endswith('pickle'): timestamps.append( d )
-        print('proboftwo.getTimestamps Found',len(timestamps),'directories with pickle files')
-        return sorted(timestamps)
-    def MANY(self):
-        '''
-        main routine for analyzing many toy MC
-        '''
-        timestamps = self.getTimestamps()
-        method = 'L-BFGS-B'
-        bigDict = self.analyzeMany(timestamps,method=method)
-        if len(bigDict)>0  : self.plotMany(method,bigDict)
-        print('proboftwo.MANY log in',self.logDir)
-        return
+        if Nevt==-1: Nevt = self.nSim
+        Ncoinc = {}
+        for cr in nCoinc:
+            Ncoinc[cr] = 0
+        for evt in range(Nevt):
+            genPE = self.oneEvent(LY,coincType)
+            for cr in nCoinc:
+                if self.coinc(genPE,criterion=cr) : Ncoinc[cr] += 1
+        return Ncoinc
+    def reduce(self,meanPE,cDef):
+        means = []
+        for i in cDef: means.append( meanPE[i] )
+        return means
+    def REDUCE(self, LY, coincType):
+        key = str(LY)+coincType
+        if key in self.MEANS : return self.MEANS[key]
+        means = self.reduce(self.meanPE[LY], self.coincDef[coincType] )
+        self.MEANS[key] = means
+        return means
     def calculate(self,LY,coincType):
         '''
         determine probability of two-fold coincidence for coincType and LY
         '''
         if LY not in self.meanPE: sys.exit('proboftwo.calculate ERROR LY ' + str(LY) + ' not valid')
         if coincType not in self.coincDef: sys.exit('proboftwo.calculate ERROR coincType ' + coincType + ' not valid')
-        means = []
-        for i in self.coincDef[coincType]:
-            means.append( self.meanPE[LY][i] )
+            
+        means = self.REDUCE(LY,coincType)
+
         p2f = self.pof2(means)
         return p2f
     def pof2(self,means):
@@ -489,17 +182,49 @@ class proboftwo():
         if self.debug>0 : print('proboftwo.pof2 Pnohits,P1hits',Pnohits,P1hits)
         pof2 = 1. - (Pnohits + P1hits)
         return pof2
+    def ebinom(self,N,Ntot):
+        '''
+        return binomial error for N successes out of Ntot tries
+        '''
+        if N<=0 or N>=Ntot: return 0.
+        f = float(N)/float(Ntot)
+        return math.sqrt(f*(1.-f)/float(Ntot))*float(Ntot)
     def main(self):
         '''
-        calculation and maybe toy simulation
+        calculation and toy simulation for two-fold coincidences
         '''
+        coincCriteria = [ '>1', '>2', '>3', '==1', '==2', '==3','==4']
+        favCC = coincCriteria[0]
+
+        results = {}
 
         for LY in self.meanPE:
+            results[LY] = []
+
             for coincType in self.coincDef:
                 p2f = self.calculate(LY,coincType)
                 N = int(p2f*self.nSim)
-                print('proboftwo.main LY,coincType,N',LY,coincType,N)
+                results[LY].append(N)
 
+                Ncoinc = self.oneExpt(LY,coincType,Nevt=self.nSim,nCoinc=coincCriteria)
+                e = self.ebinom(Ncoinc[favCC],self.nSim)
+                s = -999.
+                if e>0: s = float(N-Ncoinc[favCC])/e
+                print('proboftwo.main LY,coincType,N,Ncoinc,signif',LY,coincType,N,Ncoinc[favCC],'{:.2f}'.format(s),'coincidence criteria is',favCC)
+                if len(coincCriteria)>1:
+                    words = ''
+                    for CC in coincCriteria: words += CC + ':{}, '.format(Ncoinc[CC])
+                    print('proboftwo.main',words)
+
+        h = '{:>3}'.format('LY')
+        for coincType in self.coincDef: h+= ' {:>7}'.format(coincType)
+        print(h)
+        for LY in self.meanPE:
+            h = '{:>3}'.format(LY)
+            for i in range(len(self.coincDef)):
+                h += ' {:>7}'.format(results[LY][i])
+
+            print(h)
         return
 if __name__ == '__main__' :
     debug = -1
