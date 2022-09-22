@@ -648,6 +648,15 @@ class calibf():
         Expts      = [100, 100, 50,  20,  20]
         nEvent  = 1000
         Events     = [nEvent for x in range(len(Expts))] 
+
+        statStudy = False
+        if statStudy :
+        # study of statistics on CF determination 20220922
+            muDataList = [1.5, 1.5, 1.5]
+            Expts      = [100, 100, 50]
+            Events     = [1000, 10000, 40000]
+            nEvent     = None # not used
+            print('calibf.main Study of statistics on CF determination')
         for jExpt,muData in enumerate(muDataList):
             Nevt = Events[jExpt]
             Nexpt= Expts[jExpt]
