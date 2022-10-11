@@ -50,7 +50,37 @@ class twofold():
         self.toyMC = nToy > 0
         print('twofold.__init__ debug',self.debug,'nToy',self.nToy,'toyMC',self.toyMC)
 
+## 20221011 definitions of SM selections
+        self.pmtGroup = {'EVEN': [0,2,4,6], 'ODD':  [1,3,5,7],
+                         'RED' : [0,2,5,7], 'BLUE': [1,3,4,6],
+                         'INNER':[1,2,5,7], 'OUTER':[0,3,4,6] }
+        self.pmtPairs = [ ['EVEN','ODD'], ['RED','BLUE'], ['INNER','OUTER'] ]
 
+        self.pmtCoinc = {}
+        for group in self.pmtGroup:
+            pmts = self.pmtGroup[group]
+            self.pmtCoinc[group] = []
+            for i,I in enumerate(pmts):
+                for j in range(i+1,len(pmts)):
+                    self.pmtCoinc[group].append( [pmts[i],pmts[j]] )
+
+        self.uniqPairs = {}
+
+        for pair in self.pmtPairs:
+            A,B = pair
+            print('twofold.__init__','pairs',A,self.pmtCoinc[A],'  ',B,self.pmtCoinc[B])
+            aCoinc,bCoinc = [x for x in self.pmtCoinc[A]],[x for x in self.pmtCoinc[B]]
+            for group in self.pmtGroup:
+                if group not in pair:
+                    for c in self.pmtCoinc[group]:
+                        if self.debug > 1 : print(group,'c',c,'aCoinc',aCoinc,'bCoinc',bCoinc)
+                        if c in aCoinc: aCoinc.remove(c)
+                        if c in bCoinc: bCoinc.remove(c)
+            self.uniqPairs[A] = aCoinc
+            self.uniqPairs[B] = bCoinc
+            print('twofold.__init__','unique pairs',A,self.uniqPairs[A],'  ',B,self.uniqPairs[B])
+                            
+        
 ## table of unique twofold coincidences from WbLS_0525_2022
         self.sources   = ['DATA','MC']
         self.TwoFold = {}
@@ -76,6 +106,7 @@ class twofold():
         self.Npmt = self.nPMT = 8
         OK = True
         maximum = {}
+        self.probTwoFold = {}
         for src in self.sources: 
             L = len(self.TwoFold[src][0])
             if L!=self.nPMT : print('inconsistent array length',L,'and nPMT',self.nPMT)
@@ -89,6 +120,8 @@ class twofold():
                         OK = False
                         print(src,'inconsistent i',i,'j',j,'Nij',Nij,'Nji',Nji)
             maximum[src] = m
+            self.probTwoFold[src] = self.TwoFold[src]/(10.*m)
+            if self.debug > 0 : print('twofold.__init__ self.probTwoFold[',src,']',self.probTwoFold[src])
         if OK : print('twofold.__init__ Consistency check OK')
         self.maximum = maximum
 
@@ -99,7 +132,6 @@ class twofold():
         if self.debug > 0 : print('twofold.__init__ prob',self.prob)
         print('twofold.__init__ maximum',maximum)
 
-        
 
         self.figDir = self.Figures #'TWOFOLD_FIGURES/'
 			
@@ -561,13 +593,42 @@ class twofold():
             for method in methods:
                 self.plotResults(fitresults,method,self.now)
         return
+    def groupRate(self,group,dmc='DATA'):
+        '''
+        return calculated rate for group based on twofold coincidences
+        '''
+        rate = 0.
+        notAlready = 1.
+
+        for coinc in self.pmtCoinc[group]:
+            if self.debug > 1 : print('twofold.groupRate group,coinc',group,coinc)
+            if self.debug > 1 : print('twofold.groupRate dmc,coinc[0],self.probTwoFold[dmc][coinc[0]]',dmc,coinc[0],self.probTwoFold[dmc][coinc[0]])
+            p = self.probTwoFold[dmc][coinc[0]][coinc[1]]
+            if self.debug > 0: print('twofold.groupRate group,coinc,p,notAlready,rate',group,coinc,p,notAlready,rate)
+            rate += p*notAlready
+            notAlready *= (1. - p)
+        return rate
+    def newMain(self):
+        '''
+        try to figure out distributions of EVEN/ODD, RED/BLUE, INNER/OUTER from twofold rates 20221011
+        '''
+        for x in ['DATA', 'MC']:
+            print('newMain',x)
+            print(self.TwoFold[x])
+
+        dmc = 'DATA'
+        for group in self.pmtGroup:
+            rate = self.groupRate(group,dmc=dmc)
+            print('twofold.newMain',dmc,'group',group,'rate',rate)
+        return
 if __name__ == '__main__' :
     debug = -1
-    nToy  = 0
+    nToy  = 0 - 1
     timestamp = None
     if len(sys.argv)>1 :
         if 'help' in sys.argv[1].lower():
             print('USAGE: python twofold.py debug[{0}] nToy[{1}] timestamp[{2}]'.format(debug,nToy,timestamp))
+            print('USAGE: if nToy < 0, then use newMain')
             print('USAGE: if timestamp is not None, then analyze data corresponding to timestamp')
             print('USAGE: if timestamp==`MANY`, then analyze data from many timestamps')
             sys.exit()
@@ -577,10 +638,13 @@ if __name__ == '__main__' :
     if len(sys.argv)>3 : timestamp = sys.argv[3]
     
     P = twofold(debug=debug,nToy=nToy)
-    if timestamp is None:
-        P.main()
-    elif timestamp=='MANY':
-        P.MANY()
+    if nToy < 0:
+        P.newMain()
     else:
-        P.readAndAnalyze(timestamp)
-    
+        if timestamp is None:
+            P.main()
+        elif timestamp=='MANY':
+            P.MANY()
+        else:
+            P.readAndAnalyze(timestamp)
+
