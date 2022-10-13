@@ -55,6 +55,8 @@ class twofold():
                          'RED' : [0,2,5,7], 'BLUE': [1,3,4,6],
                          'INNER':[1,2,5,7], 'OUTER':[0,3,4,6] }
         self.pmtPairs = [ ['EVEN','ODD'], ['RED','BLUE'], ['INNER','OUTER'] ]
+        self.grpPairs = []
+        for p in self.pmtPairs: self.grpPairs.append( p[0]+'_'+p[1] )
 
         self.pmtCoinc = {}
         for group in self.pmtGroup:
@@ -79,7 +81,8 @@ class twofold():
             self.uniqPairs[A] = aCoinc
             self.uniqPairs[B] = bCoinc
             print('twofold.__init__','unique pairs',A,self.uniqPairs[A],'  ',B,self.uniqPairs[B])
-                            
+
+
         
 ## table of unique twofold coincidences from WbLS_0525_2022
         self.sources   = ['DATA','MC']
@@ -131,7 +134,35 @@ class twofold():
         self.prob = X/m
         if self.debug > 0 : print('twofold.__init__ prob',self.prob)
         print('twofold.__init__ maximum',maximum)
+## table of coincidences from tech note (and which prez?)                            
+        self.cName = ['A&B ','A&~B', '~A&B']
+        self.measCoinc = {'MC': {'EVEN_ODD': [2847, 5678, 6706], 'RED_BLUE': [2627,6290,5087], 'INNER_OUTER': [2319, 8411, 4809]},
+                        'DATA': {'EVEN_ODD': [4176, 4498, 4960], 'RED_BLUE': [ 800,4468,5196], 'INNER_OUTER': [ 796, 5366,5507]} }
 
+## calculate measured fractions
+        self.fracCoinc = {src: {c:[] for c in self.grpPairs} for src in self.sources}
+        for dmc in self.sources:
+            for gname in self.grpPairs:
+                v = numpy.array(self.measCoinc[dmc][gname])
+                self.fracCoinc[dmc][gname] = v/sum(v)
+        if self.debug > 0 :
+            for dmc in self.sources:
+                print('twofold.__init__ dmc,self.measCoinc',dmc,self.measCoinc)
+                print('twofold.__inti__ dmc,self.fracCoinc',dmc,self.fracCoinc)
+                
+## report totals in all pairs in a group and for uniq pairs in each group
+        for dmc in self.sources:
+            for group in self.pmtCoinc:
+                pmts = self.pmtCoinc[group]
+                upmts= self.uniqPairs[group]
+                tot,utot = 0,0
+                for pair in pmts:
+                    print('pair',pair)
+                    i,j = pair
+                    cts = self.TwoFold[dmc][i][j]
+                    tot += cts
+                    if pair in upmts : utot == utot
+            print('twofold.__init__ dmc,group,tot,utot',dmc,group,tot,utot)        
 
         self.figDir = self.Figures #'TWOFOLD_FIGURES/'
 			
@@ -593,9 +624,9 @@ class twofold():
             for method in methods:
                 self.plotResults(fitresults,method,self.now)
         return
-    def groupRate(self,group,dmc='DATA'):
+    def groupProb(self,group,dmc='DATA'):
         '''
-        return calculated rate for group based on twofold coincidences
+        return calculated prob for group based on twofold coincidences
         '''
         rate = 0.
         notAlready = 1.
@@ -608,18 +639,131 @@ class twofold():
             rate += p*notAlready
             notAlready *= (1. - p)
         return rate
+    def getProbTF(self,scaleF,dmc='DATA'):
+        '''
+        recalculate self.probTwoFold given scaleF and data or MC
+        '''
+        sF = max(1.,scaleF)
+        if scaleF<1. :
+            print('twofold.getProbTF input scaleF',scaleF,'rescaled to',sF)
+        self.probTwoFold[dmc] = self.TwoFold[dmc]/(sF*self.maximum[dmc])
+        return
+    def pairProb(self,gProb,gPair):
+        '''
+        return pairProb for the each of the group pairs in gPair
+        '''
+        pP = {}
+        for pair in gPair:
+            p1,p2 = gProb[pair[0]], gProb[pair[1]]
+            pname = pair[0] + '_' + pair[1]
+            pP[pname] = [p1*p2, p1*(1.-p2), p2*(1.-p1)]
+        return pP
+    def plotCResults(self,sF,pNames,results,Fractions=True,showMeas=False):
+        '''
+        plot pResults[dmc][j][pname][i] for j,x in enumerate(sF)
+        dmc = 'DATA','MC'
+        j = scale factor bin in sF
+        pname = 'EVEN_ODD','RED_BLUE' or 'INNER_OUTER' in pNames
+        i = 0,1,2 = A&B, A&~B, ~A&B
+        if Fractions = True then calculate total = A&B + A&~B + ~A&B 
+             and plot A&B/total, A&~B/total, ~A&B/total
+        '''
+        pts = ['-.',':','-']
+        colpt = ['r','b','g']
+        altcol= ['m','c','y']
+        X = numpy.array(sF)
+        x1,x2 = X[0],X[-1]
+        for dmc in self.sources:
+            for ip,pname in enumerate(pNames):
+                ydict = {c:[] for c in self.cName}
+                total = None
+
+                for ic,c in enumerate(self.cName):
+                    ydict[c] = [results[dmc][j][pname][ic] for j,jx in enumerate(sF)]
+                    if total is None:
+                        total = numpy.array(ydict[c])
+                    else:
+                        total+= numpy.array(ydict[c])
+                for ic,c in enumerate(self.cName):
+                    Y = numpy.array(ydict[c])
+                    if Fractions : Y = Y/total
+                    plt.plot(X,Y,pts[ip]+colpt[ic],label=c+' '+pname)
+                    if showMeas: 
+                        y1 = y2 = self.fracCoinc[dmc][pname][ic]
+                        plt.plot((x1,x2),(y1,y2),altcol[ic]+pts[ip],label='meas '+c+' '+pname)
+                        if self.debug > 2 : print('twofold.plotCResults dmc,pname,c,x1,y1,x2,y2',dmc,pname,c,x1,y1,x2,y2)
+            plt.grid()
+            plt.xlim(0,2.*x2)
+            plt.legend(ncol=1,loc='right',fontsize='small')
+            plt.title(dmc)
+            plt.show()
+        return
+            
+        
     def newMain(self):
         '''
         try to figure out distributions of EVEN/ODD, RED/BLUE, INNER/OUTER from twofold rates 20221011
         '''
-        for x in ['DATA', 'MC']:
-            print('newMain',x)
+        for x in self.sources:
+            print('twofold.newMain',x)
             print(self.TwoFold[x])
 
-        dmc = 'DATA'
-        for group in self.pmtGroup:
-            rate = self.groupRate(group,dmc=dmc)
-            print('twofold.newMain',dmc,'group',group,'rate',rate)
+        fmt0 = '{:.3f} '
+        fmt = fmt0+fmt0+fmt0
+
+        sF = [float(x)/10. for x in range(10,20,2)]
+        sF.extend( [float(x) for x in range(2,21)] )
+        fmt2 = ''
+        fmtN = ''
+        for i in sF :
+            fmt2 += fmt0
+            fmtN += '{} '
+
+
+        pResults = {}  # probabilities
+        nResults = {}  # numbers of events
+        
+        for dmc in self.sources:
+            pResults[dmc] = []
+            nResults[dmc] = []
+            for scaleF in sF:
+                if self.debug > 0 : print('twofold.newMain dmc,scaleF',dmc,scaleF)
+                self.getProbTF(scaleF,dmc=dmc)
+                gP  = {}
+                for group in self.pmtGroup:
+                    gP[group] = pb = self.groupProb(group,dmc=dmc)
+                    if self.debug > 0 : print('twofold.newMain',dmc,'group',group,'pb','{:.3f}'.format(pb))
+                pProb = self.pairProb(gP,self.pmtPairs)
+                pNames = list(pProb.keys())
+                pResults[dmc].append( pProb )
+                nProb = {}
+                if self.debug > 1: print('twofold.newMain pProb',pProb)
+                for pname in pProb:
+                    if self.debug > 1 : print('twofold.newMain pname,pProb[pname]',pname,pProb[pname])
+                    y = []
+                    for x in pProb[pname]: y.append( int(scaleF*self.maximum[dmc]*x) )
+                    nProb[pname] = y
+                nResults[dmc].append( nProb )
+                for pair in pProb:
+                    if self.debug > 0 : print('twofold.newMain',pair,'pairProb',fmt.format(*pProb[pair]))
+                    if self.debug > 0 : print('twofold.newMain',pair,'pairNum',nProb[pair])
+        print(pNames)
+        for dmc in self.sources:
+            if self.debug > 0 : print('>>>',pResults[dmc])
+            pname = pNames[0]
+            i = 0
+            j = 0
+            if self.debug > 1 :
+                print('>>>>',dmc,j,pResults[dmc][j])
+                print('>>>>>',dmc,j,pname,pResults[dmc][j][pname])
+                print('>>>>>',dmc,j,pname,i,pResults[dmc][j][pname][i])
+            if self.debug > 0 : 
+                for pname in pNames:
+                    for i in range(3):
+                        print('twofold.newMain',dmc,pname,self.cName[i],fmt2.format(*[pResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
+                    for i in range(3):
+                        print('twofold.newMain',dmc,pname,self.cName[i],fmtN.format(*[nResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
+        self.plotCResults(sF,pNames,nResults)
         return
 if __name__ == '__main__' :
     debug = -1
