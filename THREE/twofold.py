@@ -157,12 +157,12 @@ class twofold():
                 upmts= self.uniqPairs[group]
                 tot,utot = 0,0
                 for pair in pmts:
-                    print('pair',pair)
+                    #print('pair',pair)
                     i,j = pair
                     cts = self.TwoFold[dmc][i][j]
                     tot += cts
-                    if pair in upmts : utot == utot
-            print('twofold.__init__ dmc,group,tot,utot',dmc,group,tot,utot)        
+                    if pair in upmts : utot += cts
+                print('twofold.__init__ dmc,group,tot,utot,utot/max',dmc,group,tot,utot,'{:.3f}'.format(float(utot)/self.maximum[dmc]),'uniq pairs',upmts)        
 
         self.figDir = self.Figures #'TWOFOLD_FIGURES/'
 			
@@ -639,10 +639,12 @@ class twofold():
             rate += p*notAlready
             notAlready *= (1. - p)
         return rate
-    def getProbTF(self,scaleF,dmc='DATA'):
+    def getProbTF(self,scaleF,dmc=None):
         '''
         recalculate self.probTwoFold given scaleF and data or MC
+        dmc = 'DATA' or 'MC'
         '''
+        if dmc is None : sys.exit('twofold.getProbTF ERROR must specify dmc')
         sF = max(1.,scaleF)
         if scaleF<1. :
             print('twofold.getProbTF input scaleF',scaleF,'rescaled to',sF)
@@ -688,8 +690,9 @@ class twofold():
                     Y = numpy.array(ydict[c])
                     if Fractions : Y = Y/total
                     plt.plot(X,Y,pts[ip]+colpt[ic],label=c+' '+pname)
-                    if showMeas: 
-                        y1 = y2 = self.fracCoinc[dmc][pname][ic]
+                    if showMeas:
+                        y1 = y2 = self.measCoinc[dmc][pname][ic]
+                        if Fractions: y1 = y2 = self.fracCoinc[dmc][pname][ic]
                         plt.plot((x1,x2),(y1,y2),altcol[ic]+pts[ip],label='meas '+c+' '+pname)
                         if self.debug > 2 : print('twofold.plotCResults dmc,pname,c,x1,y1,x2,y2',dmc,pname,c,x1,y1,x2,y2)
             plt.grid()
@@ -763,7 +766,7 @@ class twofold():
                         print('twofold.newMain',dmc,pname,self.cName[i],fmt2.format(*[pResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
                     for i in range(3):
                         print('twofold.newMain',dmc,pname,self.cName[i],fmtN.format(*[nResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
-        self.plotCResults(sF,pNames,nResults)
+        self.plotCResults(sF,pNames,nResults,Fractions=False,showMeas=True)
         return
 if __name__ == '__main__' :
     debug = -1
