@@ -707,9 +707,22 @@ class twofold():
         '''
         try to figure out distributions of EVEN/ODD, RED/BLUE, INNER/OUTER from twofold rates 20221011
         '''
+        cmap = 'rainbow'
         for x in self.sources:
             print('twofold.newMain',x)
             print(self.TwoFold[x])
+            plt.matshow(self.TwoFold[x]/self.maximum[x],cmap=cmap)
+            plt.title(x + ' normed')
+            plt.colorbar()
+        print('twofold.newMain DATA/MC')
+        ''' from last answer to https://stackoverflow.com/questions/17870612/printing-a-two-dimensional-array-in-python '''
+        numpy.set_printoptions(precision=3)
+        print(numpy.matrix(self.TwoFold['DATA']/self.TwoFold['MC']))
+        plt.matshow(self.TwoFold['DATA']/self.TwoFold['MC'],cmap=cmap)
+        plt.title('Data/MC')
+        plt.colorbar()
+                         
+        plt.show()
 
         fmt0 = '{:.3f} '
         fmt = fmt0+fmt0+fmt0
