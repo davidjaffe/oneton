@@ -708,20 +708,26 @@ class twofold():
         try to figure out distributions of EVEN/ODD, RED/BLUE, INNER/OUTER from twofold rates 20221011
         '''
         cmap = 'rainbow'
-        for x in self.sources:
+        im = [None,None]
+        fig, (ax, axn) = plt.subplots(nrows=2,ncols=2)
+        for i,x in enumerate(self.sources):
             print('twofold.newMain',x)
             print(self.TwoFold[x])
-            plt.matshow(self.TwoFold[x]/self.maximum[x],cmap=cmap)
-            plt.title(x + ' normed')
-            plt.colorbar()
+            im[i] = ax[i].matshow(self.TwoFold[x]/self.maximum[x],cmap=cmap)
+            ax[i].set_title(x + ' normed')
+            fig.colorbar(im[i],ax=ax[i])
         print('twofold.newMain DATA/MC')
         ''' from last answer to https://stackoverflow.com/questions/17870612/printing-a-two-dimensional-array-in-python '''
         numpy.set_printoptions(precision=3)
         print(numpy.matrix(self.TwoFold['DATA']/self.TwoFold['MC']))
-        plt.matshow(self.TwoFold['DATA']/self.TwoFold['MC'],cmap=cmap)
-        plt.title('Data/MC')
-        plt.colorbar()
-                         
+        in0 = axn[0].matshow(self.TwoFold['DATA']/self.TwoFold['MC'],cmap=cmap)
+        axn[0].set_title('Data/MC')
+        fig.colorbar(in0, ax=axn[0])
+        in1 = axn[1].matshow((self.TwoFold['DATA']/self.TwoFold['MC'])*(self.maximum['MC']/self.maximum['DATA']),cmap=cmap)
+        axn[1].set_title('Data normed/MC normed')
+        #axn[1].set_zlim(0,3.6)
+        fig.colorbar(in1, ax=axn[1])
+        plt.tight_layout()
         plt.show()
 
         fmt0 = '{:.3f} '
@@ -779,7 +785,9 @@ class twofold():
                         print('twofold.newMain',dmc,pname,self.cName[i],fmt2.format(*[pResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
                     for i in range(3):
                         print('twofold.newMain',dmc,pname,self.cName[i],fmtN.format(*[nResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
-        self.plotCResults(sF,pNames,nResults,Fractions=False,showMeas=True)
+        plotCR = False
+        if plotCR : 
+            self.plotCResults(sF,pNames,nResults,Fractions=False,showMeas=True)
         return
 if __name__ == '__main__' :
     debug = -1
