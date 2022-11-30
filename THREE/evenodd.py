@@ -6,6 +6,8 @@ EVEN/ODD, RED/BLUE, INNER/OUTER groupings
 
 add analysis of CF factors for different muon generators
 from WbLS_0614_2022.pptx page 4
+
+add new coincidence tables (MC1, MC2) from WbLS_1115_2022 for MC with CF factors applied
 '''
 import numpy
 
@@ -17,17 +19,31 @@ import matplotlib.pyplot as plt
 
 class evenodd():
     def __init__(self):
-        self.sources   = ['DATA','MC']
+        self.sources   = ['DATA','MC','MC1','MC2']
         self.groupings = ['RED-BLUE','EVEN-ODD',  'INNER-OUTER']
  # A.B, A.!B, !A.B
         self.coinc = {}
-        self.coinc['MC'] =  {'EVEN-ODD': [2487, 5678, 6706],  
-                    'RED-BLUE':[2627,6290,5087],
-                    'INNER-OUTER':[2319, 8411, 4809]}
+        self.coinc['MC'] =  {
+            'EVEN-ODD': [2487, 5678, 6706],  
+            'RED-BLUE':[2627,6290,5087],
+            'INNER-OUTER':[2319, 8411, 4809]}
 			
-        self.coinc['DATA'] =  {'EVEN-ODD': [4176, 4498, 4960],
-                    'RED-BLUE':[800, 4468, 5196],
-                        'INNER-OUTER':[796, 5366, 5507] }
+        self.coinc['DATA'] =  {
+            'EVEN-ODD': [4176, 4498, 4960],
+            'RED-BLUE':[800, 4468, 5196],
+            'INNER-OUTER':[796, 5366, 5507] }
+
+# MC1 = new MC with CF = 1.
+        self.coinc['MC1'] = {
+            'EVEN-ODD'   : [2236, 4564, 5490],
+            'INNER-OUTER': [2066, 7107, 3776],
+            'RED-BLUE'   : [2374, 5173, 3981] }
+# MC2 = new MC with CF != 1. (after calibration)
+        self.coinc['MC2'] = {
+            'EVEN-ODD'   : [2116, 5496, 6245],
+            'INNER-OUTER': [1981, 6410, 5801],
+            'RED-BLUE'   : [2149, 5801, 4537] }
+
 
         print('evenodd.__init__ Totals in each grouping')
         for src in self.sources:
@@ -78,10 +94,13 @@ class evenodd():
         first plot data and MC fractions for all groupings as bar chart
         second plot as pie chart
         '''
+
+        debug = 0
+        
         xlab = []
         align = ['center','center']
         width = [.5, .5]
-        color = ['red','blue']
+        color = ['red','blue','green','black']
         dx = 0.0
         xstep = 1. #2*dx
         xtext = []
@@ -90,7 +109,7 @@ class evenodd():
         for I,src in enumerate(self.sources):
             x = float(I)*dx
             xticks = []
-            for group in self.groupings:
+            for J,group in enumerate(self.groupings):
                 f = Fracs[src][group]
                 df=dFracs[src][group]
                 X,Y,dY = [],[],[]
@@ -99,14 +118,14 @@ class evenodd():
                     x += xstep
                     Y.append(pair[0])
                     dY.append(pair[1])
-                plt.errorbar(X,Y,dY,label=src+' '+group,marker='.',drawstyle='steps-mid')
+                plt.errorbar(X,Y,dY,label=src+' '+group,marker='.',drawstyle='steps-mid',color=color[I])
                 xticks.extend( X )
                 xtext.append( 0.5*(min(X)+max(X)) )
         plt.xticks(xticks,labels=xlab)
         for xt,group in zip(xtext,self.groupings):
             plt.text(xt,0.01,group,horizontalalignment='center')
-        plt.legend(ncol=2)
-        plt.ylim([0.,.7])
+        plt.legend(ncol=2,loc='best')
+        plt.ylim([0.,1.0])
         plt.grid(linestyle=':')
         plt.title('Compare fractions within each group')
         pdf = self.figDir + 'fractions_within_groups.pdf'
@@ -114,7 +133,7 @@ class evenodd():
         print('evenodd.plot Wrote',pdf)
         plt.show()
 
-        fig, ax = plt.subplots(nrows=2,ncols=3)
+        fig, ax = plt.subplots(nrows=2+2,ncols=3)
         
         for I,src in enumerate(self.sources):
             x = float(I)*dx
@@ -130,8 +149,44 @@ class evenodd():
         print('evenodd.plot Wrote',pdf)
         plt.show()
         
-
-        
+#### |data-MC| differences
+        fdata = Fracs['DATA']
+        dfdata=dFracs['DATA']
+        y = []
+        xlabel = []
+        xt,yt,tt = [],[],[]
+        N = 0
+        for group in self.groupings:
+            tt.append(group)
+            xt.append(N)
+            for src in self.sources:
+                if src!='DATA':
+                    N += 1
+                    f = Fracs[src]
+                    df=dFracs[src]
+                    dev = 0
+                    if debug>0: print('evenodd.plot group,fdata[group]',group,fdata[group])
+                    if debug>0: print('evenodd.plot group,    f[group]',group,f[group])
+                    for a,b in zip(fdata[group],f[group]):
+                        dev += abs(a-b)
+                    if debug>0: print('evenodd.plot dev(DATA,',src,')',dev,group)
+                    xlabel.append(src)
+                    y.append(dev)
+        yt = [1.1*max(y) for j in xt]
+        x = range(len(y))
+        barlist = plt.bar(x,y)
+        plt.ylabel('Deviation from data fraction')
+        for j,t in enumerate(tt):
+            plt.text(xt[j],yt[j],t)
+        plt.xticks(x,xlabel)#,rotation='vertical')
+        for j,bl in enumerate(barlist):
+            c = j//len(self.groupings)
+            bl.set_color(color[c])
+        plt.grid()
+        pdf = self.figDir + 'deviation_from_data_fraction.pdf'
+        plt.savefig(pdf)
+        print('evenodd.plot Wrote',pdf)
+        plt.show()
         return
     def plotCF(self):
         '''
@@ -231,7 +286,7 @@ class evenodd():
         ax.set_ylabel('CF(FLAT)/CF(CRY)')
         ax.set_xlabel('Signal PMT')
         ax.set_title('CF ratios for stopped muon selections')
-        ax.legend()
+        ax.legend(loc='best')
         ax.grid(axis='y')
         pdf = self.figDir + 'CF_FLAT_over_CF_CRY.pdf'
         plt.savefig(pdf)
@@ -243,7 +298,7 @@ class evenodd():
         
         return
     def main(self):
-        EvenOddCoincRates = False
+        EvenOddCoincRates = True
         if EvenOddCoincRates : 
         
             Fracs,dFracs = {},{}
@@ -263,7 +318,7 @@ class evenodd():
             #print('Fracs',Fracs,'\ndFracs',dFracs)
             self.plot(Fracs,dFracs)
 
-        CFtable = True
+        CFtable = False
         if CFtable :
             self.plotCF()
             
