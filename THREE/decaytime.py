@@ -42,13 +42,9 @@ class decaytime():
         f1,f2,f3 = [],[],[] 
         facc = []
         s = 0.
-        dtmin = 1.e3
-        i25 = -1
+
         for i,t in enumerate(T):
-            dt = abs(t-25.)
-            if dt<dtmin:
-                i25 = i
-                dtmin = dt
+
             y = self.decayfunc(t)
             f.append(y)
             s += y
@@ -62,7 +58,9 @@ class decaytime():
         f1,f2,f3 = numpy.array(f1),numpy.array(f2),numpy.array(f3)
         m = facc[-1]
         facc = numpy.array(facc)/m
-        print('Cumulative integral at',i,'t=',T[i25],'ns is',facc[i25])
+        for t in [25.,50.]:
+            i = numpy.argmin(abs(T-t))
+            print('Cumulative integral at',i,'t=',T[i],'ns is',facc[i])
         
 
         uselog = [0,0,1,1]
