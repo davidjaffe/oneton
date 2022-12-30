@@ -46,9 +46,12 @@ class linearLY():
             x.append( self.conc[c] )
         LY, dLY, x = self.toNPA(LY), self.toNPA(dLY), self.toNPA(x)
 
+        ## do linear fit to the first 3 points
         param, cov = curve_fit(self.linear, x[:3], LY[:3], sigma=dLY[:3])
         print('linearLY.main results of linear fit, param',param,'cov',cov)
 
+        ## generate a family of fit parameters consistent with
+        ## the fit results
         size = 500
         p = numpy.random.multivariate_normal(param,cov,size=size)
 
@@ -61,12 +64,16 @@ class linearLY():
         for xma in [101.,10.1]:
             for yscale in ['linear','log']:
                 for xscale in ['linear','log']:
+
+                    ### plot data
                     plt.errorbar(x,LY,fmt='o',yerr=dLY,color='black')
 
+                    ### draw family of fit results as grey band
                     for pair in p:
                         m,b = pair
                         YY = m*X+b
                         plt.plot(X,YY,color='grey',linestyle='solid',alpha=0.1)
+                    ### main fit result
                     plt.plot(X,Y,'r-')
 
                     plt.title('absolute LY arXiv:2006.00173 table 1')
