@@ -2,6 +2,7 @@
 '''
 plot and integrate  time profile distribution from 
 Cherenkov and scintillation separation in water-based liquid scintillator using an LAPPD Figure12 arXiv:2110.13222
+Left figure 12 corresponding to 1% WbLS
 
 20221230
 '''
@@ -77,11 +78,11 @@ class timeprofile():
         fC = ', fraction {:.3f}'.format(sumC/sumT)
         fS = ', fraction {:.3f}'.format(sumS/sumT)
             
-        plt.errorbar(Tt,Tc,fmt='o',yerr=eTc,color='black',label='MC')
+        plt.errorbar(Tt,Tc,fmt='o',yerr=eTc,color='red',label='MC')
         plt.errorbar(Ct,Cc,fmt='o',yerr=eCc,color='blue',label='MC Cerenkov'+fC)
         plt.errorbar(St,Sc,fmt='o',yerr=eSc,color='orange',label='MC Scintillation'+fS)
 
-        plt.title('arXiv:2110.13222 Cherenkov and scintillation separation in \nwater-based liquid scintillator using an LAPPD Figure12')
+        plt.title('arXiv:2110.13222 Cherenkov and scintillation separation in \n1% WbLS using an LAPPD Figure12')
         plt.grid()
         plt.xlim(0, 10.)
         plt.legend(loc='best')
