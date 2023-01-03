@@ -707,19 +707,23 @@ class twofold():
         '''
         try to figure out distributions of EVEN/ODD, RED/BLUE, INNER/OUTER from twofold rates 20221011
         '''
+        ''' from last answer to https://stackoverflow.com/questions/17870612/printing-a-two-dimensional-array-in-python '''
+        numpy.set_printoptions(precision=3)
+
         cmap = 'rainbow'
         im = [None,None]
         fig, (ax, axn) = plt.subplots(nrows=2,ncols=2)
         for i,x in enumerate(self.sources):
             print('twofold.newMain',x)
             print(self.TwoFold[x])
+            print('twofold.newMain',x,'normed')
+            print(numpy.matrix(self.TwoFold[x]/self.maximum[x]))
             im[i] = ax[i].matshow(self.TwoFold[x]/self.maximum[x],cmap=cmap)
             ax[i].set_title(x + ' normed')
             fig.colorbar(im[i],ax=ax[i])
         print('twofold.newMain DATA/MC')
-        ''' from last answer to https://stackoverflow.com/questions/17870612/printing-a-two-dimensional-array-in-python '''
-        numpy.set_printoptions(precision=3)
         print(numpy.matrix(self.TwoFold['DATA']/self.TwoFold['MC']))
+
         in0 = axn[0].matshow(self.TwoFold['DATA']/self.TwoFold['MC'],cmap=cmap)
         axn[0].set_title('Data/MC')
         fig.colorbar(in0, ax=axn[0])
@@ -749,12 +753,13 @@ class twofold():
             pResults[dmc] = []
             nResults[dmc] = []
             for scaleF in sF:
-                if self.debug > 0 : print('twofold.newMain dmc,scaleF',dmc,scaleF)
+                ONE = scaleF==1.
+                if self.debug > 0 or ONE: print('twofold.newMain dmc,scaleF',dmc,scaleF)
                 self.getProbTF(scaleF,dmc=dmc)
                 gP  = {}
                 for group in self.pmtGroup:
                     gP[group] = pb = self.groupProb(group,dmc=dmc)
-                    if self.debug > 0 : print('twofold.newMain',dmc,'group',group,'pb','{:.3f}'.format(pb))
+                    if self.debug > 0 or ONE: print('twofold.newMain',dmc,'group',group,'pb','{:.3f}'.format(pb))
                 pProb = self.pairProb(gP,self.pmtPairs)
                 pNames = list(pProb.keys())
                 pResults[dmc].append( pProb )
@@ -767,8 +772,8 @@ class twofold():
                     nProb[pname] = y
                 nResults[dmc].append( nProb )
                 for pair in pProb:
-                    if self.debug > 0 : print('twofold.newMain',pair,'pairProb',fmt.format(*pProb[pair]))
-                    if self.debug > 0 : print('twofold.newMain',pair,'pairNum',nProb[pair])
+                    if self.debug > 0 or ONE: print('twofold.newMain',pair,'pairProb',fmt.format(*pProb[pair]))
+                    if self.debug > 0 or ONE: print('twofold.newMain',pair,'pairNum',nProb[pair])
         print(pNames)
         for dmc in self.sources:
             if self.debug > 0 : print('>>>',pResults[dmc])
@@ -785,7 +790,7 @@ class twofold():
                         print('twofold.newMain',dmc,pname,self.cName[i],fmt2.format(*[pResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
                     for i in range(3):
                         print('twofold.newMain',dmc,pname,self.cName[i],fmtN.format(*[nResults[dmc][j][pname][i] for j,x in enumerate(sF)]))
-        plotCR = False
+        plotCR = True
         if plotCR : 
             self.plotCResults(sF,pNames,nResults,Fractions=False,showMeas=True)
         return
