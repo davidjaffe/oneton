@@ -85,6 +85,7 @@ class timeprofile():
         plt.title('arXiv:2110.13222 Cherenkov and scintillation separation in \n1% WbLS using an LAPPD Figure12')
         plt.grid()
         plt.xlim(0, 10.)
+        plt.xlabel('Time (ns)')
         plt.legend(loc='best')
         png = 'TIMEPROFILE_FIGURES/timeprofile_arXiv2110.13222.png'
         plt.savefig(png)
