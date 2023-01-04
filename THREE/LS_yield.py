@@ -70,12 +70,15 @@ class LS_yield():
         ### 1105.2100 = Ref6, H. Wan Chan Tseung, J.Kasper, N.Tolich
         ### measurements of LY vs electron energy (Ee) taken from Figure 7
         ### for LAB + 3 g/L PPO and EJ301
+        self.Ref6_name = 'LAB30'
+        self.Ref6_conc = '3.0 g/L PPO'
+        self.Ref6_relTo= 'EJ301'
         ### LY and Ee in pixel units
         ### LAB CALIBRATION
         ### LY = (800-pLY) * (4e3/(800-163)) = optical photons
         ### Ee = pEe * 3.0 MeV / 456
-        self.LAB_pLY = numpy.array([301, 365, 434, 474, 516, 567, 610, 663, 704, 722, 747])
-        self.LAB_pEe = numpy.array([420, 373, 314, 282, 249, 207, 169, 130,  93,  79,  60])
+        self.LAB_pLY = numpy.array([301, 365, 434, 474, 516, 567, 610, 663, 704, 722, 747, 756, 764, 773, 783])
+        self.LAB_pEe = numpy.array([420, 373, 314, 282, 249, 207, 169, 130,  93,  79,  60,  51,  44,  33,  23])
         self.LAB_LY = (800.-self.LAB_pLY) * (4.e3/(800.-163.))
         self.LAB_Ee = self.LAB_pEe * 3.0 /456.
         words = 'LS_yield.__init__ LAB (Ee,LY) ='
@@ -86,8 +89,8 @@ class LS_yield():
         ### EJ301 CALIBRATION
         ### LY = (800-pLY) * (3.5e3/(800-91)) = optical photons
         ### Ee = pEe * 2.5 MeV / 653.
-        self.EJ301_pLY = numpy.array([ 82, 235, 428, 611, 645, 679])
-        self.EJ301_pEe = numpy.array([541, 422, 290, 157, 132, 107])
+        self.EJ301_pLY = numpy.array([ 82, 235, 428, 611, 645, 679, 692, 706, 717, 769, 785])
+        self.EJ301_pEe = numpy.array([541, 422, 290, 157, 132, 107,  98,  88,  78,  36,  21])
         self.EJ301_LY = (800.-self.EJ301_pLY) * (3.5e3/(800.-91.))
         self.EJ301_Ee = self.EJ301_pEe * 2.5 / 653.
         words = 'LS_yield.__init__ EJ301 (Ee,LY) ='
@@ -99,10 +102,10 @@ class LS_yield():
 
         # 2205.15046 = Ref4 dict[solvent] = [WLS, (rLY,drLY), LY]
         # results from table 2
-        self.LY4 = {'EJ301'     : [ 'NA', (78.,0.), 13570],
-                    'p-Xylene'  : [ '4 g/L PPO', (77.2,1.9), 13430],
-                    'LAB40'     : [ '4 g/L PPO', (60.2,1.4), 10470],
-                    'DIN40'     : [ '4 g/L PPO', (70.0,1.7), 12190],
+        self.LY4 = {'EJ301'     : [ 'NA', (78./100.,0.), 13570],
+                    'p-Xylene'  : [ '4 g/L PPO', (77.2/100.,1.9/100.), 13430],
+                    'LAB40'     : [ '4 g/L PPO', (60.2/100.,1.4/100.), 10470],
+                    'DIN40'     : [ '4 g/L PPO', (70.0/100.,1.7/100.), 12190],
                     'relativeTo': ['anthracene']}
 
         # NIM A701 (2013) 133
@@ -128,42 +131,101 @@ class LS_yield():
                     'LAB50'  : ['5.0 g/L PPO', (0.72, 0.01)],
                     'relativeTo': ['EJ301']}
 
+        # 1812.02998 Production and Properties of the Liquid Scintillators used in the Stereo Reactor Neutrino Experiment
+        # values taken from text and Table 3
+        # Table 3 lists LY of 8700 and 9000 ph/MeV for LAB30 and LAB70, resp., but text states 8400 ph/MeV for LAB30.
+        # Text states Anthracene produces about 17400 ph/MeV as reference
+        # Ref7
+        self.LY7 = {'LAB03' : ['3.0 g/L PPO',(8700./17400., 0.05*8700./17400.), 8700.],
+                    'LAB07' : ['7.0 g/L PPO',(9000./17400., 0.05*9000./17400.), 9000.],
+                    'relativeTo': ['anthracene']}
+
+
+        ### 2011.12924 Development, characterisation, and deployment of the SNO+ liquid scintillator
+        ### Ref8
+        ### LAB20x = measured rLY 0.96 of LY of PC + 2 g/L PPO, inferred aLY 11900(1100)
+        ### LAB20a = measured aLY 10830(570) based on data and simulation. Not de-oxygenated.
+        ### LAB20b = measured aLY 11920(630) based on data and simulation. De-oxygenated.
+        x,dx = 11900.,1100.
+        ref = x/0.96
+        a,da = 10830.,570.
+        b,db = 11920.,630.
+        self.LY8 = {'LAB20x': ['2.0 g/L PPO',(x/ref,dx/ref), x],
+                    'LAB20a': ['2.0 g/L PPO',(a/ref,da/ref), a],
+                    'LAB20b': ['2.0 g/L PPO',(b/ref,db/ref), b],
+                    'relativeTo': ['PC 2.0 g/L PPO']}
+
         self.LY = {'Ref3' : self.LY3,
                    'Ref4' : self.LY4,
-                   'Ref5' : self.LY5}
+                   'Ref5' : self.LY5,
+                   'Ref7' : self.LY7,
+                   'Ref8' : self.LY8}
 
         
         
         return
     def plotLYvEe(self):
         '''
-        plot Ref6 results
+        plot Ref6 results and set Ref6 values
         '''
+        refTitle = 'Measurement of the dependence of the LY of LAB-based\n and EJ-301 scintillators on electron energy'
         LABEe, LABLY = self.LAB_Ee, self.LAB_LY
         EJEe,  EJLY  = self.EJ301_Ee, self.EJ301_LY
-        plt.plot(LABEe,LABLY,'o',color='black',linestyle='dotted',label='LAB')
-        plt.plot(EJEe ,EJLY ,'o',color='blue',linestyle='dotted',label='EJ301')
 
-        plt.legend(loc='best')
-        plt.grid()
-        plt.show()
+        fig, axs = plt.subplots(2,1,sharex=True)
+        
+        axs[0].plot(LABEe,LABLY,'o',color='black',linestyle='dotted',label='LAB')
+        axs[0].plot(EJEe ,EJLY ,'o',color='blue',linestyle='dotted',label='EJ301')
+        axs[0].set_title('Ref6 ' + refTitle)
+        axs[0].legend(loc='best')
+        axs[0].grid()
+        axs[0].set_ylabel('Light yield')
+        #plt.show()
 
+        delMax = 0.02
+        Emin = 0.30
+        cuts = 'Require $\Delta E <${:.2f}, Emin {:.2f} MeV'.format(delMax,Emin)
         rLY,rE,dE = [],[],[]
         for E,LY in zip(EJEe,EJLY):
             idx = numpy.argmin(numpy.abs(LABEe-E))
             iLY,iE = LABLY[idx],LABEe[idx]
-            rLY.append( iLY/LY )
-            rE.append( (E+iE)/2.)
-            dE.append( abs(E-iE)/2.)
+            delta = abs(E-iE)/2.
+            if delta<delMax and E>Emin and iE>Emin: 
+                rLY.append( iLY/LY )
+                rE.append( (E+iE)/2.)
+                dE.append( delta)
         rLY,rE,dE = self.toNPA(rLY), self.toNPA(rE), self.toNPA(dE)
-        plt.errorbar(rE,rLY,xerr=dE,marker='o',color='black',label='LAB/EJ301')
-        plt.legend(loc='best')
-        plt.grid()
-        plt.show()
+        print('dE',dE)
+        axs[1].errorbar(rE,rLY,xerr=dE,marker='o',color='black',label='LAB/EJ301')
 
-        plt.hist(rLY)
-        plt.xlabel('LY(LAB)/LY(EJ301)')
+        m,s = numpy.mean(rLY),numpy.std(rLY)
+        rmi = m - 3.*s
+        rma = m + 3.*s
+        words = 'mean {:.3f} std.dev. {:.3f}'.format(m,s)
+        for i,ls in zip([-1.,0.,1.],['dotted','dashed','dotted']):
+            axs[1].plot([min(rE),max(rE)],[m+i*s,m+i*s],linestyle=ls,color='grey')
+        
+        axs[1].set_ylabel('LY(LAB)/LY(EJ301)')
+        axs[1].set_xlabel('Electron energy (MeV)')
+        axs[1].grid()
+        axs[1].set_ylim(rmi,rma)
+        axs[1].sharex(axs[0])
+        #axs[1].set_xscale('log')
+        axs[1].text(min(rE)+.5,m-2.*s,words)
+        axs[1].text(min(rE),m+2.*s,cuts)
+
+        fig.subplots_adjust(hspace=0)
+
+        png = self.figDir + 'Ref6_LAB_relative_to_EJ301.png'
+        plt.savefig(png)
+        print('LS_yield.plotLYvEe Wrote',png)
+
         plt.show()
+        
+        ### set Ref6 values
+        self.LY6 = {self.Ref6_name : [self.Ref6_conc, (m,s)],
+                    'relativeTo':[self.Ref6_relTo ]}
+        self.LY['Ref6'] = self.LY6
         
         return
     def getConc(self,words):
@@ -229,8 +291,6 @@ class LS_yield():
         Num = relTo, X,Y,dY,Z = self.unpackRef(ref,solvent=sol1,report=report)
         Den = relTo, X,Y,dY,Z = self.unpackRef(ref,solvent=sol2,report=report)
 
-#        if len(X)!=1: sys.exit('LS_yield.makeRatio ERROR '+str(len(X))+' references, only 1 allowed')
-        
         relTo = sol2
         x,y,dy,z = [],[],[],[]
         Xden,Yden,dYden = Den[1],Den[2],Den[3]
@@ -261,19 +321,24 @@ class LS_yield():
         return s
     def main(self):
 
-
+        ### plots Ref6 data and sets Ref6 relative LY
         self.plotLYvEe()
-        sys.exit(' JUST PLOT LY VS Ee for Ref6 ++++++++++')
         
-        # ref3 = LAB, DIN relative to PC
+        
+        # ref3 = LAB, DIN relative to PC + 1.5 g/L PPO
         # ref4 = LAB, DIN, EJ301 relative to anthracene
         # ref5 = LAB relative to EJ301
+        # ref6 = LAB relative to EJ301
+        # ref7 = LAB relative to anthracene
+        # ref8 = LAB relative to PC + 2.0 g/L PPO
 
         # put unpacked results into dict C
         C = {}
         report = True
-        for ref in ['Ref3','Ref4','Ref5']:
-            for solvent in ['EJ301','LAB','DIN']:
+        for ref in ['Ref3','Ref4','Ref5','Ref6','Ref7','Ref8']:
+            Solvents = ['EJ301','LAB','DIN']
+            if ref=='Ref8' : Solvents = ['LAB20x', 'LAB20a', 'LAB20b']
+            for solvent in Solvents:
                 C[self.makeName(ref,solvent,'')] = relTo, X,Y,dY,Z = self.unpackRef(ref,solvent=solvent,report=report)
 
         ##### plot LAB relative to DIN vs concentration
@@ -294,7 +359,7 @@ class LS_yield():
         if relToA!=relToB : sys.exit('LS_yield.main ERROR relToA '+relToA+' not equal to '+relToB)
         title = 'LAB light yield relative to '+relToA
         plt.title(title)
-        plt.xlabel('PPO concentration in %')
+        plt.xlabel('PPO concentration in g/L')
         plt.ylabel('Relative light yield')
         plt.ylim(0.,1.3)
         plt.grid()
@@ -312,6 +377,10 @@ class LS_yield():
         label = self.makeName('Ref5','LAB','')
         relToA,X,Y,dY,Z = C[label]
         plt.errorbar(X,Y,yerr=dY,marker='o',color='black',linestyle='dotted',label=label)
+        
+        label = self.makeName('Ref6','LAB','')
+        relToA,X,Y,dY,Z = C[label]
+        plt.errorbar(X,Y,yerr=dY,marker='o',color='brown',linestyle='dotted',label=label)
 
         label = self.makeName('Ref4','LAB','EJ301')
         relToB,X,Y,dY,Z = C[label]
@@ -321,12 +390,64 @@ class LS_yield():
 
         title = 'LAB light yield relative to '+relToA
         plt.title(title)
-        plt.xlabel('PPO concentration in %')
+        plt.xlabel('PPO concentration in g/L')
         plt.ylabel('Relative light yield')
-        plt.ylim(0.,1.01)
+        plt.ylim(0.19,.81)
         plt.grid()
         plt.legend(loc='best')
         pdf = self.figDir + title.replace(' ','_')
+        plt.savefig(pdf)
+        print('LS_yield.main Wrote',pdf)
+        plt.show()
+
+        ##### plot LABPPO relative to anthracene
+        label = self.makeName('Ref4','LAB','')
+        relToA,X,Y,dY,Z = C[label]
+        plt.errorbar(X,Y,yerr=dY,marker='o',color='black',linestyle='dotted',label=label)
+        
+        label = self.makeName('Ref7','LAB','')
+        relToB,X,Y,dY,Z = C[label]
+        plt.errorbar(X,Y,yerr=dY,marker='o',color='brown',linestyle='dotted',label=label)
+        
+        if relToA!=relToB : sys.exit('LS_yield.main ERROR relToA '+relToA+' not equal to '+relToB)
+
+        title = 'LAB light yield relative to '+relToA
+        plt.title(title)
+        plt.xlabel('PPO concentration in g/L')
+        plt.ylabel('Relative light yield')
+        plt.ylim(0.19,.81)
+        plt.grid()
+        plt.legend(loc='best')
+        pdf = self.figDir + title.replace(' ','_')
+        plt.savefig(pdf)
+        print('LS_yield.main Wrote',pdf)
+        plt.show()
+
+
+        ##### plot LABPPO relative to PC
+        label = self.makeName('Ref3','LAB','')
+        relToA,X,Y,dY,Z = C[label]
+        plt.errorbar(X,Y,yerr=dY,marker='o',color='black',linestyle='dotted',label=label)
+
+        markers = ['o','v','s']
+        colors  = ['brown','green','blue']
+        for i,solvent in enumerate(['LAB20a','LAB20b','LAB20x']):
+            offset = float(i-1)*.1
+            label = self.makeName('Ref8',solvent,'')
+            relToB,X,Y,dY,Z = C[label]
+            plt.errorbar(X+offset,Y,yerr=dY,marker=markers[i],color=colors[i],linestyle='dotted',label=label)
+        
+        #if relToA!=relToB : sys.exit('LS_yield.main ERROR relToA '+relToA+' not equal to '+relToB)
+
+        title = 'LAB light yield relative to '+relToA+'(Ref3) and '+relToB+'(Ref8)'
+        
+        plt.title(title)
+        plt.xlabel('PPO concentration in g/L')
+        plt.ylabel('Relative light yield')
+        #plt.ylim(0.19,.81)
+        plt.grid()
+        plt.legend(loc='best')
+        pdf = self.figDir + 'LAB LY relative to PC'.replace(' ','_')
         plt.savefig(pdf)
         print('LS_yield.main Wrote',pdf)
         plt.show()
