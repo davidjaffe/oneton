@@ -67,6 +67,35 @@ class LS_yield():
         self.lfit = {'slope': (127.9,17.0),
                      'intercept': (108.3, 51.0)}
 
+        ### 1105.2100 = Ref6, H. Wan Chan Tseung, J.Kasper, N.Tolich
+        ### measurements of LY vs electron energy (Ee) taken from Figure 7
+        ### for LAB + 3 g/L PPO and EJ301
+        ### LY and Ee in pixel units
+        ### LAB CALIBRATION
+        ### LY = (800-pLY) * (4e3/(800-163)) = optical photons
+        ### Ee = pEe * 3.0 MeV / 456
+        self.LAB_pLY = numpy.array([301, 365, 434, 474, 516, 567, 610, 663, 704, 722, 747])
+        self.LAB_pEe = numpy.array([420, 373, 314, 282, 249, 207, 169, 130,  93,  79,  60])
+        self.LAB_LY = (800.-self.LAB_pLY) * (4.e3/(800.-163.))
+        self.LAB_Ee = self.LAB_pEe * 3.0 /456.
+        words = 'LS_yield.__init__ LAB (Ee,LY) ='
+        for Ee,LY in zip(self.LAB_Ee,self.LAB_LY):
+            words += ' ({:.2f},{:.0f})'.format(Ee,LY)
+        print(words)
+
+        ### EJ301 CALIBRATION
+        ### LY = (800-pLY) * (3.5e3/(800-91)) = optical photons
+        ### Ee = pEe * 2.5 MeV / 653.
+        self.EJ301_pLY = numpy.array([ 82, 235, 428, 611, 645, 679])
+        self.EJ301_pEe = numpy.array([541, 422, 290, 157, 132, 107])
+        self.EJ301_LY = (800.-self.EJ301_pLY) * (3.5e3/(800.-91.))
+        self.EJ301_Ee = self.EJ301_pEe * 2.5 / 653.
+        words = 'LS_yield.__init__ EJ301 (Ee,LY) ='
+        for Ee,LY in zip(self.EJ301_Ee,self.EJ301_LY):
+            words += ' ({:.2f},{:.0f})'.format(Ee,LY)
+        print(words)
+
+
 
         # 2205.15046 = Ref4 dict[solvent] = [WLS, (rLY,drLY), LY]
         # results from table 2
@@ -104,6 +133,37 @@ class LS_yield():
                    'Ref5' : self.LY5}
 
         
+        
+        return
+    def plotLYvEe(self):
+        '''
+        plot Ref6 results
+        '''
+        LABEe, LABLY = self.LAB_Ee, self.LAB_LY
+        EJEe,  EJLY  = self.EJ301_Ee, self.EJ301_LY
+        plt.plot(LABEe,LABLY,'o',color='black',linestyle='dotted',label='LAB')
+        plt.plot(EJEe ,EJLY ,'o',color='blue',linestyle='dotted',label='EJ301')
+
+        plt.legend(loc='best')
+        plt.grid()
+        plt.show()
+
+        rLY,rE,dE = [],[],[]
+        for E,LY in zip(EJEe,EJLY):
+            idx = numpy.argmin(numpy.abs(LABEe-E))
+            iLY,iE = LABLY[idx],LABEe[idx]
+            rLY.append( iLY/LY )
+            rE.append( (E+iE)/2.)
+            dE.append( abs(E-iE)/2.)
+        rLY,rE,dE = self.toNPA(rLY), self.toNPA(rE), self.toNPA(dE)
+        plt.errorbar(rE,rLY,xerr=dE,marker='o',color='black',label='LAB/EJ301')
+        plt.legend(loc='best')
+        plt.grid()
+        plt.show()
+
+        plt.hist(rLY)
+        plt.xlabel('LY(LAB)/LY(EJ301)')
+        plt.show()
         
         return
     def getConc(self,words):
@@ -202,6 +262,9 @@ class LS_yield():
     def main(self):
 
 
+        self.plotLYvEe()
+        sys.exit(' JUST PLOT LY VS Ee for Ref6 ++++++++++')
+        
         # ref3 = LAB, DIN relative to PC
         # ref4 = LAB, DIN, EJ301 relative to anthracene
         # ref5 = LAB relative to EJ301
