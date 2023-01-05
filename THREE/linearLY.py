@@ -106,10 +106,10 @@ class linearLY():
                     words = rng+yw+'X'+xscale 
 
                     ### plot data
-                    plt.errorbar(x,LY,fmt='o',yerr=dLY,color='black')
+                    plt.errorbar(x,LY,fmt='o',yerr=dLY,color='black',label='LBL')
 
                     ### plot BNL data
-                    plt.errorbar(BNLx,BNLLY,fmt='o',yerr=dBNLLY,color='blue')
+                    plt.errorbar(BNLx,BNLLY,fmt='o',yerr=dBNLLY,color='blue',label='BNL')
 
                     ### draw family of fit results as grey band
                     for pair in p:
@@ -121,7 +121,8 @@ class linearLY():
 
                     plt.title('absolute LY arXiv:2006.00173 table 1')
                     plt.grid()
-
+                    plt.legend(loc='best')
+                    
                     plt.xlabel('% Concentration')
                     plt.ylabel('Light yield (ph/MeV/% conc)')
                     plt.xscale(xscale)
